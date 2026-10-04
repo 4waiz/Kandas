@@ -439,6 +439,26 @@ const VOICES = {
     send(ctx, out, 0.2);
     return stab(ctx, out, t + 0.28, [48, 60, 64, 67, 72], { peak: 0.04, a: 0.01, hold: 0.2, d: 0.7, cut: 3200, cut1: 700 }); // C
   },
+  leechDrain(ctx, out, t) { // wet, descending squelch
+    hiss(ctx, out, t, { f: 2400, f1: 500, sweep: 0.18, q: 6, d: 0.2, peak: 0.08 });
+    return tone(ctx, out, t, { type: 'square', f: 620, f1: 140, glide: 0.2, d: 0.22, peak: 0.06, lp: 1800 });
+  },
+  mirrorShoot(ctx, out, t) { // glassy rising ping, like a sound played back
+    tone(ctx, out, t, { type: 'sine', f: 1760, f1: 2640, glide: 0.08, a: 0.02, d: 0.12, peak: 0.06 });
+    return tone(ctx, out, t + 0.03, { type: 'triangle', f: 880, f1: 1320, glide: 0.06, a: 0.01, d: 0.16, peak: 0.07, lp: 4000 });
+  },
+  wardenShield(ctx, out, t) { // deflected shot: metallic tick
+    return tone(ctx, out, t, { type: 'square', f: 2200, f1: 1800, glide: 0.02, d: 0.05, peak: 0.035, lp: 5000 });
+  },
+  wardenBreak(ctx, out, t) { // the shield shatters
+    hiss(ctx, out, t, { type: 'highpass', f: 1800, q: 0.7, d: 0.45, peak: 0.12 });
+    stab(ctx, out, t, [72, 79, 84], { peak: 0.04, d: 0.5, cut: 6000, cut1: 1200 });
+    return tone(ctx, out, t, { type: 'sawtooth', f: 180, f1: 60, glide: 0.35, d: 0.45, peak: 0.1, lp: 900 });
+  },
+  callout(ctx, out, t) { // a new character's name card
+    tone(ctx, out, t, { type: 'triangle', f: mtof(76), d: 0.12, peak: 0.08 });
+    return tone(ctx, out, t + 0.09, { type: 'triangle', f: mtof(83), d: 0.3, peak: 0.09, lp: 3200 });
+  },
   death(ctx, out, t) {
     const r = rig(ctx).srand, pre = gain(ctx, 0.9), g = ctx.createGain(), end = env(g.gain, t, 0.09, 0.005, 0.5, 0.7);
     const o = osc(ctx, pre, 'triangle', 880, t, end); // stair-stepped, bit-crushed descent
@@ -457,6 +477,7 @@ const RULES = {
   playerHurt: [0.08, 3], explode: [0.04, 2], dash: [0.06, 2], echoSpawn: [0.3, 3],
   trainTick: [0.03, 1], trainDone: [0.3, 3], predictBlip: [0.4, 1], uiHover: [0.03, 1],
   uiClick: [0.03, 2], roundStart: [0.3, 3], roundClear: [0.3, 3], death: [0.5, 4],
+  leechDrain: [0.08, 2], mirrorShoot: [0.06, 1], wardenShield: [0.05, 1], wardenBreak: [0.3, 3], callout: [0.3, 3],
 };
 
 // ─── core: sequencer + sfx dispatch for one context (realtime or offline) ───
@@ -672,6 +693,11 @@ export class AudioEngine {
   roundStart() { this._sfx('roundStart'); }
   roundClear() { this._sfx('roundClear'); }
   death() { this._sfx('death'); }
+  leechDrain() { this._sfx('leechDrain'); }
+  mirrorShoot() { this._sfx('mirrorShoot'); }
+  wardenShield() { this._sfx('wardenShield'); }
+  wardenBreak() { this._sfx('wardenBreak'); }
+  callout() { this._sfx('callout'); }
 
   // ---- offline render (trailer) ----
   /**

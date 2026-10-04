@@ -64,3 +64,15 @@ export const LINKS = {
   team: 'https://kanbanstudios.ae/team-kanban',
   repo: 'https://github.com/4waiz/self-play',
 };
+
+// ---- the cast: new archetypes alongside Bit and Byte ----
+export const LEECH = { radius: 0.42, speed: 8.6, hp: 1, score: 15, drain: 50, pack: [3, 5] };
+export const MIRROR = { radius: 0.62, hp: 4, score: 150, delay: 2.0, maxSpeed: 13, fireEvery: 1.8, bulletSpeed: 17 };
+export const WARDEN = { radius: 1.15, speed: 2.2, hp: 16, score: 800, shieldR: 3.6, openTime: 3.2, volleyEvery: 2.6, volley: 10, bulletSpeed: 9 };
+
+// Name cards shown the first time each character appears in a run.
+export const CAST = {
+  leech: { name: 'LEECH', desc: 'Latches on and drains your score. Comes in packs.', color: C.pink },
+  mirror: { name: 'MIRROR', desc: 'Replays your last 2 seconds. Stop repeating your routes.', color: C.violet },
+  warden: { name: 'WARDEN', desc: 'Shielded boss. Dash through its ring to break the shield.', color: C.acid },
+};

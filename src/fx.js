@@ -71,6 +71,18 @@ export class Particles {
     }
   }
 
+  // A bright white pop at the impact point, then a few sparks in the target's colour.
+  hitFlash(x, y, z, color) {
+    this.spawn(x, y, z, 0, 0, 0, 0.1, 3.4, new THREE.Color(5, 5, 5), 0, 0);
+    this.burst(x, y, z, color, 5, 5, 0.25, 0.7, 2.6);
+  }
+
+  // Shards in the character's colour plus cream ink flecks.
+  deathBurst(x, z, color, size = 1) {
+    this.burst(x, 0.6, z, color, Math.round(26 * size), 9 * size, 0.6, 1.2);
+    this.burst(x, 0.6, z, 0xf5f1e8, Math.round(10 * size), 6 * size, 0.45, 0.8, 1.3);
+  }
+
   update(dt) {
     let i = 0;
     while (i < this.n) {

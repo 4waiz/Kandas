@@ -3,7 +3,7 @@
 // orbits counter-clockwise most of the time, dashes away from close bullets) so
 // you can watch its Echo inherit that style.
 
-import { ARENA_R, PLAYER } from './config.js';
+import { ARENA_R, PLAYER, WARDEN } from './config.js';
 import { range, chance } from './rng.js';
 
 export class Pilot {
@@ -126,6 +126,22 @@ export class Pilot {
     mx += dodgeX;
     mz += dodgeZ;
 
+    // A shielded Warden: head straight for it and dash through the ring.
+    let breakX = 0;
+    let breakZ = 0;
+    const warden = game.drones.find((d) => d.kind === 'warden' && d.active && d.shielded);
+    if (warden) {
+      const wx = warden.x - p.x;
+      const wz = warden.z - p.z;
+      const wd = Math.hypot(wx, wz) || 1;
+      mx = wx / wd + dodgeX * 0.3;
+      mz = wz / wd + dodgeZ * 0.3;
+      if (wd < WARDEN.shieldR + 2.4 && wd > WARDEN.shieldR - 0.4 && p.dashCd <= 0) {
+        breakX = wx / wd;
+        breakZ = wz / wd;
+      }
+    }
+
     // Stay off the wall.
     const r = Math.hypot(p.x, p.z);
     if (r > ARENA_R - 4) {
@@ -162,5 +178,10 @@ export class Pilot {
     pad.moveX = this.keyX / kl;
     pad.moveZ = this.keyZ / kl;
     if (!this.keyX && !this.keyZ) pad.moveX = pad.moveZ = 0;
+    if (breakX || breakZ) {
+      pad.moveX = breakX;
+      pad.moveZ = breakZ;
+      pad.dash = true;
+    }
   }
 }

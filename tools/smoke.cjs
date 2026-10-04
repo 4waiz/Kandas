@@ -29,14 +29,30 @@ const fail = (msg) => {
     g.advance(4.5);
     const trained = { state: g.state, models: g.models.length, acc: g.latest?.acc, archetype: g.profile?.archetype.name };
     g.continueFromProfile();
-    for (let i = 0; i < 30 && g.round < 4 && g.state !== 'over'; i++) g.advance(3);
-    return { afterCalibration, trained, round: g.round, state: g.state, kills: g.kills };
+    // Keep the autopilot alive so the run reaches the round-3 Warden.
+    for (let i = 0; i < 80 && g.round < 4 && g.state !== 'over'; i++) {
+      g.player.invuln = 4;
+      g.player.hp = 6;
+      g.advance(3);
+    }
+    return {
+      afterCalibration,
+      trained,
+      round: g.round,
+      state: g.state,
+      kills: g.kills,
+      seen: [...g.seen],
+      personalities: g.models.map((m) => m.personality && `GEN ${m.gen} ${m.personality.name} ${m.personality.line}`),
+    };
   });
   console.log(JSON.stringify(run, null, 1));
   if (run.afterCalibration.state !== 'train') fail('calibration did not end in training');
   if (run.afterCalibration.samples < 150) fail('too few samples recorded');
   if (run.trained.state !== 'profile' || run.trained.models !== 1) fail('first Echo was not trained');
   if (run.kills < 1) fail('no Echo was ever defeated');
+  for (const kind of ['leech', 'mirror', 'warden']) if (!run.seen.includes(kind)) fail(`never met a ${kind}`);
+  if (run.personalities.some((p) => !p)) fail('an Echo generation has no personality');
+  if (run.round < 4) fail(`run stalled in round ${run.round} (Warden not beaten?)`);
 
   // Share link round-trip: encode the latest Echo, reload with it, accept the duel.
   const link = await page.evaluate(async () => {

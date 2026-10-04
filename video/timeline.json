@@ -1,0 +1,40 @@
+{
+  "fps": 30,
+  "duration": 90,
+  "segments": [
+    { "id": "hook", "type": "card", "start": 0, "dur": 4.5 },
+    { "id": "title", "type": "card", "start": 4.5, "dur": 5 },
+    { "id": "calib", "type": "game", "start": 9.5, "dur": 10 },
+    { "id": "train", "type": "game", "start": 19.5, "dur": 9 },
+    { "id": "echo1", "type": "game", "start": 28.5, "dur": 15 },
+    { "id": "multi", "type": "game", "start": 43.5, "dur": 9 },
+    { "id": "over", "type": "game", "start": 52.5, "dur": 6.5 },
+    { "id": "duel", "type": "game", "start": 59, "dur": 9 },
+    { "id": "how", "type": "card", "start": 68, "dur": 6 },
+    { "id": "pitch", "type": "card", "start": 74, "dur": 8 },
+    { "id": "end", "type": "card", "start": 82, "dur": 8 }
+  ],
+  "music": [
+    { "t": 0, "name": "startMusic", "args": [] },
+    { "t": 0, "name": "setIntensity", "args": [0] },
+    { "t": 4.5, "name": "roundStart", "args": [] },
+    { "t": 4.5, "name": "setIntensity", "args": [1] },
+    { "t": 19.5, "name": "setDuck", "args": [0.6] },
+    { "t": 25.5, "name": "setDuck", "args": [0.3] },
+    { "t": 28.5, "name": "setDuck", "args": [0] },
+    { "t": 28.5, "name": "setIntensity", "args": [2] },
+    { "t": 43.5, "name": "setIntensity", "args": [3] },
+    { "t": 52.5, "name": "setDuck", "args": [0.8] },
+    { "t": 54.6, "name": "setDuck", "args": [0.35] },
+    { "t": 54.6, "name": "setIntensity", "args": [1] },
+    { "t": 59, "name": "setDuck", "args": [0] },
+    { "t": 59, "name": "setIntensity", "args": [2] },
+    { "t": 68, "name": "setIntensity", "args": [1] },
+    { "t": 68, "name": "setDuck", "args": [0.25] },
+    { "t": 74, "name": "setDuck", "args": [0] },
+    { "t": 74, "name": "setIntensity", "args": [3] },
+    { "t": 74, "name": "roundClear", "args": [] },
+    { "t": 82, "name": "setIntensity", "args": [0] },
+    { "t": 82, "name": "trainDone", "args": [] }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "self-play",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SELF PLAY — a three.js arena shooter where a neural network trains on how you play, live in your browser, and becomes your rival. By Team Kanban.",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "serve": "npx http-server -p 8080 -c-1 .",
+    "dev": "node tools/build.mjs && npx http-server -p 8080 -c-1 ."
+  },
+  "author": "Team Kanban — Awaiz Ahmed (https://kanbanstudios.ae/team-kanban)",
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "three": "0.186.1"
+  }
+}

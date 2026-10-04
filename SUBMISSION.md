@@ -46,6 +46,14 @@ The same model also **predicts you**. A live PREDICTABILITY meter shows how ofte
 
 When you lose, you can **send your Echo to a friend**. The trained weights (~1 KB) are packed into the link itself, so your friend duels your brain with no server, account or install. They can send theirs straight back.
 
+## Meet the cast
+
+- **ECHO**: your clone, driven by a neural net trained on you. Each generation takes a personality from your data (Strafer, Dasher, Sniper, Brawler, Turret, Wildcard) that tunes how it fights: *"GEN 2 — THE STRAFER learned that you circle counter-clockwise."*
+- **LEECH**: pink pack hunters that drain your score on contact and die in one hit.
+- **MIRROR**: replays your exact path from two seconds ago and fires where the model predicts you'll be, so repeated routes get punished.
+- **WARDEN**: the round-3+ boss. Its ring shield eats bullets until you dash through the ring.
+- Plus **BIT** (chaser) and **BYTE** (artillery).
+
 ## How we use AI (it's real ML, not scripted "AI")
 
 - **Behaviour cloning, on-device.** A from-scratch multilayer perceptron (16 → 24 → 24 → 11, 1,283 parameters, tanh, Adam, written in plain JavaScript with no ML library) is trained on the player's own (state → action) pairs.

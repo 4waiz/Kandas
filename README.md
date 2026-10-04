@@ -18,6 +18,19 @@ The same model also **predicts where you're about to move**. A live **PREDICTABI
 
 When you lose, you can **send your Echo to a friend**. The trained weights fit in the link itself (~1 KB), so your friend fights *your brain* with no server, account or install.
 
+## Meet the cast
+
+| | Who | What it does |
+|---|---|---|
+| ◆ | **ECHO** (you) | A clone driven by a neural net trained on your play. Each generation takes one of your traits as a personality: **The Strafer** (you circle), **The Dasher**, **The Sniper**, **The Brawler**, **The Turret**, or **The Wildcard**. The trait tunes how it plays and shows on its nameplate, e.g. *"GEN 2 — THE STRAFER learned that you circle counter-clockwise."* |
+| ▲ | **BIT** | Orange chaser. Touch hurts; dash through it to pop it. |
+| ◇ | **BYTE** | Keeps its distance and lobs slow bolts. |
+| ▶ | **LEECH** | Pink pack hunter. Latches on and drains your *score*, dies in one hit. |
+| ⬡ | **MIRROR** | Walks your exact path from two seconds ago and fires where the model predicts you'll be. Repeating a route walks you into it. |
+| ⬢ | **WARDEN** | Boss at the end of round 3+. A ring shield eats your bullets; dash through the ring to open it, then hit it fast. |
+
+Every new character gets a name card the first time it appears. The predictability meter flinches whenever a Mirror or Echo lands a prediction-based hit.
+
 ## Screenshots
 
 | | |

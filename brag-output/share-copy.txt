@@ -1,0 +1,1 @@
+We made a shooter where the final boss is a neural network trained on you: it watches 25 seconds of your play, learns your habits in milliseconds, then fights you and predicts your next move. Beat it, then send your clone to a friend as a link. Play SELF PLAY: https://4waiz.github.io/self-play/ (Team Kanban, Tencent × Arcade AI Hackathon)

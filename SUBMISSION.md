@@ -47,7 +47,7 @@ When you lose, you can **send your Echo to a friend**. The trained weights (~1 K
 
 ## How we use AI (it's real ML, not scripted "AI")
 
-- **Behaviour cloning, on-device.** A from-scratch multilayer perceptron (16 → 24 → 24 → 11, 1,283 weights, tanh, Adam, written in plain JavaScript with no ML library) is trained on the player's own (state → action) pairs.
+- **Behaviour cloning, on-device.** A from-scratch multilayer perceptron (16 → 24 → 24 → 11, 1,283 parameters, tanh, Adam, written in plain JavaScript with no ML library) is trained on the player's own (state → action) pairs.
 - **Smart observations.** 16 features are expressed relative to the player's current target: distance, target velocity, arena position, nearest incoming bullet, previous move, dash readiness and HP. Because of that, the learned style transfers to fighting *you* ("circles right around whoever it fights").
 - **One model, two jobs.** It drives the Echo (sampled policy, 15 decisions/s) and it predicts the human (top-1 accuracy becomes the PREDICTABILITY meter, and the expected direction becomes the aim lead and the prediction ghost).
 - **Verified style transfer.** With scripted test players, a counter-clockwise player produced an Echo that circled counter-clockwise 76% of the time, and a clockwise player produced one that circled clockwise 79% of the time.

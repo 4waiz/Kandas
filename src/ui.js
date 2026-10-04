@@ -116,7 +116,7 @@ const TEMPLATE = `
     <h2 class="marker">You are the <span class="hl pink"><span>training data.</span></span></h2>
     <div class="steps">
       <div class="step sketchbox rot-a"><div class="label">* 01 · PLAY</div><p class="hand">For 25 seconds the game records <b>15 of your decisions every second</b> — where you are, where the threats are, what you do about it.</p></div>
-      <div class="step sketchbox rot-b"><div class="label">* 02 · TRAIN</div><p class="hand">A small neural network (<b>1,283 weights</b>) trains on that data <b>right here in your browser</b>. No servers, nothing uploaded.</p></div>
+      <div class="step sketchbox rot-b"><div class="label">* 02 · TRAIN</div><p class="hand">A small neural network (<b>1,283 parameters</b>) trains on that data <b>right here in your browser</b>. No servers, nothing uploaded.</p></div>
       <div class="step sketchbox rot-c"><div class="label">* 03 · FIGHT YOURSELF</div><p class="hand">Your <b>Echo</b> moves, dodges and shoots like you — and uses the same model to <b>predict your next move</b>. Be unpredictable.</p></div>
     </div>
     <p class="hand how-more">Every round, another generation of you joins the fight. Lose, and you can send your Echo to a friend as a link — the weights fit in the URL.</p>
@@ -462,8 +462,8 @@ export class UI {
     e.trainEpoch.textContent = `EPOCH ${Math.min(tr.epoch, tr.epochs)}/${tr.epochs}`;
     const acc = Math.round((tr.valAcc || 0) * 100);
     e.trainStats.innerHTML = done
-      ? `<b>${samples.toLocaleString()}</b> of your decisions · <b>${tr.net.paramCount.toLocaleString()}</b> weights · trained in <b>${Math.max(1, Math.round(tr.computeMs))} ms</b> · predicts you <b class="pink">${acc}%</b> of the time`
-      : `<b>${samples.toLocaleString()}</b> of your decisions → <b>${tr.net.paramCount.toLocaleString()}</b> weights · match so far <b>${acc}%</b>`;
+      ? `<b>${samples.toLocaleString()}</b> of your decisions · <b>${tr.net.paramCount.toLocaleString()}</b> parameters · trained in <b>${Math.max(1, Math.round(tr.computeMs))} ms</b> · predicts you <b class="pink">${acc}%</b> of the time`
+      : `<b>${samples.toLocaleString()}</b> of your decisions → <b>${tr.net.paramCount.toLocaleString()}</b> parameters · match so far <b>${acc}%</b>`;
     this.drawLoss(tr.lossHistory, tr.epochs);
   }
 

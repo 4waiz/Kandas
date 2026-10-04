@@ -368,3 +368,63 @@ export function buildProfile(rec, shots, hits) {
     stats: { samples: rec.total, seconds, medianDist, ccw, dashRate, accuracy, idleFrac, entropy },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Echo personalities: each generation takes one trait from your recorded data,
+// and the trait tunes how that Echo plays (multipliers on the ECHO defaults).
+
+export const PERSONALITIES = {
+  strafer: {
+    name: 'THE STRAFER',
+    mods: { speed: 1.1, temperature: 0.7 },
+    line: (p) => `learned that you circle ${p.stats.ccw >= 0.5 ? 'counter-clockwise' : 'clockwise'}`,
+  },
+  dasher: {
+    name: 'THE DASHER',
+    mods: { dashCooldown: 0.6, dashProb: 1.8 },
+    line: (p) => `learned that you dash every ${(1 / Math.max(0.05, p.stats.dashRate)).toFixed(1)} s`,
+  },
+  sniper: {
+    name: 'THE SNIPER',
+    mods: { aimNoise: 0.45, bulletSpeed: 1.25, fireRate: 0.85 },
+    line: (p) => `learned that you land ${Math.round(p.stats.accuracy * 100)}% of your shots`,
+  },
+  brawler: {
+    name: 'THE BRAWLER',
+    mods: { speed: 1.15, hp: 1.2 },
+    line: (p) => `learned that you fight from ~${Math.round(p.stats.medianDist)} m`,
+  },
+  turret: {
+    name: 'THE TURRET',
+    mods: { fireRate: 1.4, speed: 0.85 },
+    line: (p) => `learned that you stand still ${Math.round(p.stats.idleFrac * 100)}% of the time`,
+  },
+  wildcard: {
+    name: 'THE WILDCARD',
+    mods: { temperature: 1.1 },
+    line: () => "learned that you're hard to read",
+  },
+};
+
+// Strongest trait wins; a trait already given to an earlier generation is
+// skipped if another one is nearly as strong, so generations feel different.
+export function echoPersonality(profile, used = []) {
+  if (!profile) return { id: 'copycat', name: 'THE COPYCAT', line: 'learned your every move', mods: {} };
+  const t = profile.traits;
+  const score = {
+    strafer: t.ORBIT * 1.05,
+    dasher: t.EVASION,
+    sniper: t.ACCURACY * 0.95,
+    brawler: t.AGGRESSION * 0.9,
+    turret: (1 - t.MOBILITY) * 1.1,
+    wildcard: t.CHAOS * 0.85,
+  };
+  const ranked = Object.keys(score).sort((a, b) => score[b] - score[a]);
+  let pick = ranked[0];
+  if (used.includes(pick)) {
+    const alt = ranked.find((k) => !used.includes(k) && score[k] >= score[ranked[0]] * 0.6);
+    if (alt) pick = alt;
+  }
+  const P = PERSONALITIES[pick];
+  return { id: pick, name: P.name, line: P.line(profile), mods: P.mods };
+}

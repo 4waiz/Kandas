@@ -254,7 +254,15 @@ export class Echo {
     this.vx = this.vz = 0;
     this.aimX = 0;
     this.aimZ = 1;
-    this.maxHp = model.hp ?? ECHO.baseHp + (this.gen - 1) * ECHO.hpPerGen;
+    const m = model.personality?.mods || {};
+    this.speed = ECHO.speed * (m.speed ?? 1);
+    this.fireRate = ECHO.fireRate * (m.fireRate ?? 1);
+    this.dashCooldown = ECHO.dashCooldown * (m.dashCooldown ?? 1);
+    this.dashProb = m.dashProb ?? 1;
+    this.aimNoise = ECHO.aimNoise * (m.aimNoise ?? 1);
+    this.bulletSpeed = ECHO.bulletSpeed * (m.bulletSpeed ?? 1);
+    this.temperature = m.temperature ?? ECHO.temperature;
+    this.maxHp = Math.round((model.hp ?? ECHO.baseHp + (this.gen - 1) * ECHO.hpPerGen) * (m.hp ?? 1));
     this.hp = this.maxHp;
     this.alive = true;
     this.spawnT = 0;
@@ -272,6 +280,7 @@ export class Echo {
     this.flash = 0;
     this.glitchT = 0;
     this.name = model.label || `ECHO-${String(this.gen).padStart(2, '0')}`;
+    this.title = model.personality ? `GEN ${this.gen} · ${model.personality.name}` : this.name;
   }
 
   get active() {
@@ -285,7 +294,7 @@ export class Echo {
   think(game) {
     const p = game.player;
     extractFeatures(this.features, this.frame, this, p, game.bullets.playerBullets, this.prevX, this.prevZ, this.dashCd <= 0, this.hp / this.maxHp);
-    const d = decide(this.net, this.features, ECHO.temperature, rand, this.decision);
+    const d = decide(this.net, this.features, this.temperature, rand, this.decision);
     if (d.move === 0) {
       this.wantX = this.wantZ = 0;
     } else {
@@ -297,7 +306,7 @@ export class Echo {
     this.prevX = this.wantX;
     this.prevZ = this.wantZ;
 
-    if (this.dashCd <= 0 && rand() < Math.min(0.5, d.dashP * 1.15)) {
+    if (this.dashCd <= 0 && rand() < Math.min(0.6, d.dashP * 1.15 * this.dashProb)) {
       let dx = this.wantX;
       let dz = this.wantZ;
       if (Math.hypot(dx, dz) < 0.2) {
@@ -307,7 +316,7 @@ export class Echo {
       this.dashX = dx;
       this.dashZ = dz;
       this.dashT = ECHO.dashTime;
-      this.dashCd = ECHO.dashCooldown;
+      this.dashCd = this.dashCooldown;
       game.onDash(this, this.color);
     }
     this.shootIntent = rand() < Math.max(ECHO.minFireProb, d.shootP);
@@ -335,7 +344,7 @@ export class Echo {
       this.vx = this.dashX * ECHO.dashSpeed;
       this.vz = this.dashZ * ECHO.dashSpeed;
     } else {
-      steer(this, this.wantX, this.wantZ, ECHO.speed, ECHO.friction, dt);
+      steer(this, this.wantX, this.wantZ, this.speed, ECHO.friction, dt);
     }
     this.x += this.vx * dt;
     this.z += this.vz * dt;
@@ -344,7 +353,7 @@ export class Echo {
     // Aim where the model thinks you are going to be.
     const p = game.player;
     const dist = Math.hypot(p.x - this.x, p.z - this.z);
-    const lead = dist / ECHO.bulletSpeed;
+    const lead = dist / this.bulletSpeed;
     const conf = game.prediction.confidence;
     const tx = p.x + game.prediction.vx * lead * conf;
     const tz = p.z + game.prediction.vz * lead * conf;
@@ -360,11 +369,11 @@ export class Echo {
     this.aimZ /= nl;
 
     if (this.shootIntent && this.fireCd <= 0 && p.alive) {
-      this.fireCd = 1 / ECHO.fireRate;
-      const n = gauss() * (ECHO.aimNoise + game.aimError);
+      this.fireCd = 1 / this.fireRate;
+      const n = gauss() * (this.aimNoise + game.aimError);
       const bx = this.aimX * Math.cos(n) - this.aimZ * Math.sin(n);
       const bz = this.aimX * Math.sin(n) + this.aimZ * Math.cos(n);
-      game.bullets.spawn('enemy', this.x + bx * 0.9, this.z + bz * 0.9, bx, bz, ECHO.bulletSpeed, ECHO.bulletLife, this.color, 1, this.gen);
+      game.bullets.spawn('enemy', this.x + bx * 0.9, this.z + bz * 0.9, bx, bz, this.bulletSpeed, ECHO.bulletLife, this.color, 1, this.gen, 'echo');
       game.audio.echoShoot();
     }
 
@@ -596,9 +605,9 @@ export class Bullets {
     this.max = max;
   }
 
-  spawn(owner, x, z, dx, dz, speed, life, color, dmg, gen) {
+  spawn(owner, x, z, dx, dz, speed, life, color, dmg, gen, src = owner) {
     if (this.list.length >= this.max) return;
-    this.list.push({ owner, x, z, vx: dx * speed, vz: dz * speed, life, color, dmg, gen, radius: owner === 'player' ? 0.18 : 0.26, dead: false });
+    this.list.push({ owner, src, x, z, vx: dx * speed, vz: dz * speed, life, color, dmg, gen, radius: owner === 'player' ? 0.18 : 0.26, dead: false });
   }
 
   clear() {

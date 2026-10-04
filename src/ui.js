@@ -340,7 +340,7 @@ export class UI {
         p.className = 'plate';
         p.innerHTML = `<span class="label"></span><div class="pbar"><i></i></div>`;
         p.style.setProperty('--c', `#${ec.color.toString(16).padStart(6, '0')}`);
-        p.querySelector('.label').textContent = ec.name;
+        p.querySelector('.label').textContent = ec.title || ec.name;
         this.el.plates.appendChild(p);
         this.plates.set(ec, p);
       }

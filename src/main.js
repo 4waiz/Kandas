@@ -22,6 +22,7 @@ import {
   makeTrainer,
   newNet,
   buildProfile,
+  echoPersonality,
   Predictability,
   expectedLocalDir,
   DIM,
@@ -560,9 +561,10 @@ export class Game {
     const tr = this.trainer;
     const gen = this.models.length + 1;
     const model = { net: tr.net, gen, acc: tr.valAcc, samples: this.recorder.total, label: `ECHO-${pad2(gen)}`, computeMs: tr.computeMs };
+    this.profile = buildProfile(this.recorder, this.player.shots, this.player.hits);
+    model.personality = echoPersonality(this.profile, this.models.map((m) => m.personality?.id));
     this.models.push(model);
     this.latest = model;
-    this.profile = buildProfile(this.recorder, this.player.shots, this.player.hits);
     const acc = this.player.shots ? this.player.hits / this.player.shots : 0.3;
     this.aimError = Math.min(0.2, Math.max(0.02, 0.24 - acc * 0.32));
     this.trained = true;
@@ -591,9 +593,10 @@ export class Game {
     const gens = this.models.slice(-MAX_ECHOES);
     gens.forEach((m, i) => this.spawnEcho(m, i, gens.length));
     this.roundEchoes = gens.length;
-    const n = gens.length;
-    const names = n === 1 ? gens[0].label : `${n} GENERATIONS OF YOU`;
-    this.ui.banner(`ROUND ${r} · <span class="hl pink"><span>FIGHT YOURSELF</span></span>`, names, 'var(--fg)', 2.2);
+    const newest = gens[gens.length - 1];
+    const P = newest.personality;
+    const sub = P ? `GEN ${newest.gen} — ${P.name} ${P.line}.` : newest.label;
+    this.ui.banner(`ROUND ${r} · <span class="hl pink"><span>FIGHT YOURSELF</span></span>`, sub, 'var(--fg)', 2.6);
     this.audio.setDuck(0);
     this.audio.setIntensity(r >= 4 ? 3 : 2);
     this.audio.roundStart();
@@ -635,9 +638,10 @@ export class Game {
     const tr = makeTrainer(this.recorder, 30);
     tr.run(Infinity);
     const gen = this.models.length + 1;
-    this.latest = { net: tr.net, gen, acc: tr.valAcc, samples: this.recorder.total, label: `ECHO-${pad2(gen)}` };
-    this.models.push(this.latest);
     this.profile = buildProfile(this.recorder, this.player.shots, this.player.hits);
+    const personality = echoPersonality(this.profile, this.models.map((m) => m.personality?.id));
+    this.latest = { net: tr.net, gen, acc: tr.valAcc, samples: this.recorder.total, label: `ECHO-${pad2(gen)}`, personality };
+    this.models.push(this.latest);
   }
 
   // ---------------------------------------------------------------------------

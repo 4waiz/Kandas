@@ -649,8 +649,10 @@ export class AudioEngine {
   }
   /** 0..1 — 1 = heavily low-passed, quieter music (training interlude, pause). ~0.4 s ramp. */
   setDuck(amount) {
-    this._duck = clamp(num(amount, 0), 0, 1);
-    this._run((c, now) => c.setDuck(this._duck, now));
+    const a = clamp(num(amount, 0), 0, 1);
+    if (a === this._duck) return; // safe to call every frame: only changes are automated
+    this._duck = a;
+    this._run((c, now) => c.setDuck(a, now));
   }
 
   // ---- sfx (fire-and-forget; rate-limited and voice-capped inside) ----

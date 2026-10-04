@@ -64,8 +64,11 @@ print(f'total {n} frames = {n / FPS:.2f}s')
 dur = timeline['duration']
 cmd = [
     'ffmpeg', '-y', '-loglevel', 'error', '-framerate', str(FPS), '-i', os.path.join(seq, '%05d.jpg'), '-i', wav,
-    '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-profile:v', 'high',
-    '-af', f'afade=t=in:st=0:d=0.3,afade=t=out:st={dur - 2.5}:d=2.5',
+    # CRF with a VBV cap keeps the grainy footage under ~50 MB for GitHub.
+    '-c:v', 'libx264', '-preset', 'slow', '-crf', '19', '-maxrate', '4500k', '-bufsize', '9000k',
+    '-pix_fmt', 'yuv420p', '-profile:v', 'high',
+    '-af', f'loudnorm=I=-15:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.3,afade=t=out:st={dur - 2.5}:d=2.5',
+    '-ar', '48000',
     '-c:a', 'aac', '-b:a', '192k', '-t', str(dur), '-movflags', '+faststart', out,
 ]
 subprocess.run(cmd, check=True)

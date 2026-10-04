@@ -6,6 +6,7 @@
 import { LINKS, PLAYER } from './config.js';
 import { TRAITS } from './brain.js';
 import logoUrl from '../assets/ks-logo-light-sm.png';
+import logoMdUrl from '../assets/ks-logo-light-md.png';
 
 const NS = 'http://www.w3.org/2000/svg';
 const AST = `<svg class="ast" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 1.5V10.5"/><path d="M1.8 3.4 10.2 8.6"/><path d="M10.2 3.4 1.8 8.6"/></svg>`;
@@ -56,6 +57,11 @@ export function sketchBorder(el, seed = 1, stroke = 'currentColor', width = 2.6)
 }
 
 const TEMPLATE = `
+<div class="splash" role="presentation">
+  <img src="${logoMdUrl}" alt="Kanban Studios">
+  <div class="label made">MADE BY</div>
+  <div class="marker team">TEAM <span class="hl"><span>KANBAN</span></span></div>
+</div>
 <div class="hud">
   <div class="hud-tl">
     <div class="label round-label"></div>
@@ -247,6 +253,7 @@ export class UI {
       this.hovered = b;
     });
     $('.pause-btn').addEventListener('click', () => game.onAction('pause'));
+    $('.splash').addEventListener('pointerdown', (e) => e.currentTarget.remove());
     addEventListener('resize', () => this.redrawSketches());
   }
 

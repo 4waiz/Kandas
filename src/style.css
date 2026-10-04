@@ -52,6 +52,34 @@ html, body {
   background-size: 240px 240px;
 }
 
+/* ---- studio splash ------------------------------------------------------ */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(18 * var(--u));
+  pointer-events: auto;
+}
+/* Timed from the second rendered frame (see Game.tickSplash), not page load,
+   so slow first-frame shader compiles don't eat the animation. */
+.splash img, .splash .made, .splash .team { opacity: 0; }
+.splash img { height: calc(200 * var(--u)); width: auto; }
+.splash .made { letter-spacing: 6px; font-size: calc(22 * var(--u)); }
+.splash .team { font-size: calc(72 * var(--u)); }
+.splash.play img { animation: splashPop 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.splash.play .made { animation: splashUp 0.5s ease 0.35s both; }
+.splash.play .team { animation: splashUp 0.5s ease 0.5s both; }
+.splash.gone { animation: splashOut 0.6s ease forwards; }
+body.capture .splash { display: none; }
+@keyframes splashPop { 0% { transform: scale(0.6) rotate(-6deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes splashUp { 0% { transform: translateY(16px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes splashOut { to { opacity: 0; visibility: hidden; } }
+
 /* ---- type ------------------------------------------------------------- */
 .marker { font-family: 'Caveat Brush', cursive; font-weight: 400; line-height: 0.92; text-transform: uppercase; letter-spacing: 0.5px; }
 .hand { font-family: 'Architects Daughter', cursive; }

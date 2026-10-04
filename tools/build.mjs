@@ -21,7 +21,9 @@ const result = await build({
 });
 
 const js = result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
+const icon = 'data:image/png;base64,' + fs.readFileSync(path.join(root, 'assets/ks-icon-192.png')).toString('base64');
 const html = read('src/index.template.html')
+  .replace(/%ICON%/g, () => icon)
   .replace('/*FONTS*/', () => read('assets/fonts.css'))
   .replace('/*CSS*/', () => read('src/style.css'))
   .replace('/*JS*/', () => js);

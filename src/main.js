@@ -138,6 +138,7 @@ export class Game {
     requestAnimationFrame((t) => this.loop(t));
     const dt = Math.min(0.05, Math.max(0.001, (now - this.last) / 1000));
     this.last = now;
+    this.tickSplash(now);
     // Substep slow frames so fast bullets can't tunnel through targets.
     const n = Math.ceil(dt / (1 / 60) - 0.01);
     for (let i = 0; i < n; i++) this.step(dt / n, i === n - 1);
@@ -166,6 +167,23 @@ export class Game {
   advance(seconds, dt = 1 / 60) {
     const n = Math.round(seconds / dt);
     for (let i = 0; i < n; i++) this.step(dt, false);
+  }
+
+  // Studio splash ("made by Team Kanban"): starts on the second rendered frame.
+  tickSplash(now) {
+    if (this.splashDone) return;
+    const el = document.querySelector('.splash');
+    this.splashFrames = (this.splashFrames || 0) + 1;
+    if (!el) {
+      this.splashDone = true;
+    } else if (this.splashFrames === 2) {
+      el.classList.add('play');
+      this.splashAt = now;
+    } else if (this.splashAt && now - this.splashAt > 2200) {
+      el.classList.add('gone');
+      this.splashDone = true;
+      setTimeout(() => el.remove(), 700);
+    }
   }
 
   autoQuality(dt) {

@@ -316,6 +316,19 @@ body.touch .pause-btn { display: block; }
    restart every frame (the meter) would freeze at their start value. */
 body.capture .predict .bar i { transition: none; }
 
+/* new-character name card + predictability pulse */
+.callout { position: absolute; left: 50%; bottom: calc(120 * var(--u)); transform: translateX(-50%); display: none; z-index: 15; pointer-events: none; }
+.callout.on { display: block; animation: calloutIn 0.35s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.callout-box { padding: calc(12 * var(--u)) calc(24 * var(--u)) calc(14 * var(--u)); display: flex; flex-direction: column; align-items: center; gap: calc(4 * var(--u)); }
+.callout .label { color: var(--acc-sun); }
+.callout-name { font-size: calc(54 * var(--u)); color: var(--c); }
+.callout-desc { font-size: calc(18 * var(--u)); }
+@keyframes calloutIn { 0% { transform: translateX(-50%) scale(0.7) rotate(-3deg); opacity: 0; } 100% { transform: translateX(-50%); opacity: 1; } }
+.predict.pulse { animation: ppulse 0.7s ease; }
+.predict.pulse .bar i { background: var(--acc-pink) !important; }
+.predict.pulse .hint { color: var(--acc-pink); opacity: 1; }
+@keyframes ppulse { 0% { transform: scale(1); } 25% { transform: scale(1.14) rotate(-1.5deg); box-shadow: calc(6 * var(--u)) calc(6 * var(--u)) 0 0 var(--acc-pink); } 100% { transform: scale(1); } }
+
 /* trailer lower-third captions */
 .caption { position: absolute; z-index: 20; left: calc(40 * var(--u)); bottom: calc(150 * var(--u)); display: none; max-width: calc(760 * var(--u)); }
 .caption.top { top: calc(36 * var(--u)); bottom: auto; }

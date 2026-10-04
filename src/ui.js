@@ -88,6 +88,7 @@ const TEMPLATE = `
 <div class="plates"></div>
 <div class="toasts"></div>
 <div class="banner"><div class="marker big"></div><div class="label sub"></div></div>
+<div class="callout"><div class="callout-box sketchbox rot-b"><div class="label">NEW THREAT</div><div class="marker callout-name"></div><div class="hand callout-desc"></div></div></div>
 <div class="caption"><div class="cap-box sketchbox rot-a"><div class="label cap-eyebrow"></div><div class="marker cap-text"></div></div></div>
 
 <section class="screen scr-title">
@@ -236,6 +237,8 @@ export class UI {
     this.plates = new Map();
     this.bannerT = 0;
     this.toastList = [];
+    this.calloutT = 0;
+    this.pulseT = 0;
     this.hudMode = 'none';
     this.score = 0;
     this.shownScore = 0;
@@ -315,7 +318,7 @@ export class UI {
       e.pct.textContent = `${Math.round(v * 100)}%`;
       e.bar.style.width = `${v * 100}%`;
       e.bar.style.background = v > 0.6 ? 'var(--acc-pink)' : v > 0.4 ? 'var(--acc-sun)' : 'var(--acc-electric)';
-      e.hint.textContent = g.predict.n < 10 ? 'reading you…' : v > 0.6 ? "it's reading you — break your habits" : v > 0.4 ? 'keep it messy' : "it can't read you";
+      if (this.pulseT <= 0) e.hint.textContent = g.predict.n < 10 ? 'reading you…' : v > 0.6 ? "it's reading you — break your habits" : v > 0.4 ? 'keep it messy' : "it can't read you";
     }
 
     const pips = e.hp.children;
@@ -435,8 +438,33 @@ export class UI {
       this.bannerT -= dt;
       if (this.bannerT <= 0) this.el.banner.classList.remove('on');
     }
+    if (this.calloutT > 0 && (this.calloutT -= dt) <= 0) this.$('.callout').classList.remove('on');
+    if (this.pulseT > 0 && (this.pulseT -= dt) <= 0) this.el.predict.classList.remove('pulse');
     for (const t of this.toastList) t.t -= dt;
     while (this.toastList.length && this.toastList[0].t <= 0) this.toastList.shift().el.remove();
+  }
+
+  // A new character's name card (about a second on screen).
+  callout(c) {
+    const el = this.$('.callout');
+    el.style.setProperty('--c', `#${c.color.toString(16).padStart(6, '0')}`);
+    el.querySelector('.callout-name').textContent = c.name;
+    el.querySelector('.callout-desc').textContent = c.desc;
+    el.classList.remove('on');
+    void el.offsetWidth;
+    el.classList.add('on');
+    this.calloutT = 1.5;
+    requestAnimationFrame(() => sketchBorder(el.querySelector('.callout-box'), 7, 'currentColor', 2.6));
+  }
+
+  // The meter flinches when a Mirror or Echo lands a prediction-based hit.
+  pulsePredict() {
+    const el = this.el.predict;
+    el.classList.remove('pulse');
+    void el.offsetWidth;
+    el.classList.add('pulse');
+    this.pulseT = 0.8;
+    this.el.hint.textContent = 'PREDICTED — it saw that coming';
   }
 
   // Trailer captions (lower third). Only the capture director uses these.

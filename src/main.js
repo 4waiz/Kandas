@@ -5,11 +5,11 @@
 //                                     └─► dead ─► over (share your Echo)
 
 import * as THREE from 'three';
-import { ARENA_R, SAMPLE_HZ, CALIBRATION_TIME, MAX_ECHOES, PLAYER, SCORE, C } from './config.js';
+import { ARENA_R, SAMPLE_HZ, CALIBRATION_TIME, MAX_ECHOES, PLAYER, SCORE, C, CAST, LEECH, WARDEN } from './config.js';
 import { seed, rand, range, chance } from './rng.js';
 import { World, BRAIN_POS } from './world.js';
 import { Particles, Rings, Shake } from './fx.js';
-import { Player, Echo, Bit, Byte, Bullets, Ghost } from './entities.js';
+import { Player, Echo, Bit, Byte, Leech, Mirror, Warden, Bullets, Ghost } from './entities.js';
 import { Input, newPad } from './input.js';
 import { UI } from './ui.js';
 import { Pilot } from './pilot.js';
@@ -96,6 +96,11 @@ export class Game {
     this.byteT = 0;
     this.roundHits = 0;
     this.roundN = 0;
+    this.trail = [];
+    this.seen = new Set();
+    this.leechT = 0;
+    this.mirrorT = 0;
+    this.bossSpawned = false;
     this.duel = readHashEcho();
     this.best = Number(store('selfplay.best')) || 0;
     this.audio.setMuted(store('selfplay.muted') === '1');
@@ -231,6 +236,9 @@ export class Game {
   // Core simulation shared by every playable state.
   simulate(dt, pad, record) {
     this.player.update(dt, pad, this);
+    const tr = this.trail;
+    tr.push({ t: this.time, x: this.player.x, z: this.player.z });
+    while (tr.length > 2 && this.time - tr[0].t > 3) tr.shift();
     for (const e of this.echoes) e.update(dt, this);
     for (const d of this.drones) d.update(dt, this);
     this.bullets.update(dt);
@@ -269,6 +277,15 @@ export class Game {
     this.echoes.forEach(consider);
     this.drones.forEach(consider);
     return best;
+  }
+
+  // Where the player was `delay` seconds ago (null until there's enough history).
+  trailAt(delay) {
+    const tr = this.trail;
+    const t = this.time - delay;
+    if (!tr.length || tr[0].t > t) return null;
+    for (let i = tr.length - 1; i >= 0; i--) if (tr[i].t <= t) return tr[i];
+    return tr[0];
   }
 
   predictor() {
@@ -362,6 +379,11 @@ export class Game {
     this.autopilot = this.capture;
     this.pilot = new Pilot();
     this.recorder.clear();
+    this.trail = [];
+    this.seen = new Set();
+    this.leechT = 9;
+    this.mirrorT = 3;
+    this.bossSpawned = false;
     this.lastFocus = null;
     this.roundEchoes = 0;
     this.models = [];
@@ -449,6 +471,11 @@ export class Game {
       this.spawnDrone(t > 4 && bytes < 2 && chance(0.3) ? 'byte' : 'bit');
       this.spawnT = this.drones.length < 2 ? 0.15 : range(0.35, 0.8);
     }
+    this.leechT -= dt;
+    if (this.leechT <= 0 && !this.drones.some((d) => d.kind === 'leech')) {
+      this.spawnDrone('leech');
+      this.leechT = range(6, 8);
+    }
     this.simulate(dt, pad, true);
     if (this.calibrationLeft <= 0 && this.player.alive) this.startTraining();
   }
@@ -467,11 +494,52 @@ export class Game {
         this.byteT = range(8, 12);
       }
     }
+    this.leechT -= dt;
+    if (this.leechT <= 0) {
+      if (!this.drones.some((d) => d.kind === 'leech')) this.spawnDrone('leech');
+      this.leechT = range(7, 10);
+    }
+    if (this.round >= 3) {
+      this.mirrorT -= dt;
+      const mirrors = this.drones.filter((d) => d.kind === 'mirror').length;
+      if (this.mirrorT <= 0 && mirrors < (this.round >= 4 ? 2 : 1)) {
+        this.spawnDrone('mirror');
+        this.mirrorT = range(10, 14);
+      }
+    }
     this.simulate(dt, pad, true);
     if (this.player.alive && this.stateT > 1 && this.echoes.length === 0) {
       if (this.mode === 'duel') this.finishDuel(true);
-      else this.roundCleared();
+      else if (this.round >= 3 && !this.bossSpawned) this.spawnBoss();
+      else if (!this.drones.some((d) => d.kind === 'warden')) this.roundCleared();
     }
+  }
+
+  // Round 3+ ends with a Warden once every Echo is down.
+  spawnBoss() {
+    this.bossSpawned = true;
+    this.spawnDrone('warden');
+    this.ui.banner(`<span class="hl"><span>WARDEN</span></span> INCOMING`, 'Dash through its ring to break the shield', 'var(--fg)', 2.4);
+    this.audio.roundStart();
+  }
+
+  onWardenBreak(w) {
+    this.rings.spawn(w.x, w.z, C.acid, WARDEN.shieldR, WARDEN.shieldR * 1.8, 0.5);
+    this.particles.burst(w.x, 0.5, w.z, C.acid, 30, 12, 0.6, 1.1);
+    this.shake.add(0.35);
+    this.world.fx.aberration = Math.max(this.world.fx.aberration, 0.7);
+    this.audio.wardenBreak();
+    this.ui.toast('SHIELD DOWN — HIT IT NOW', 'var(--acc-acid)');
+  }
+
+  // First appearance of a new character in a run: a 1-second name card.
+  introduce(kind) {
+    if (this.seen.has(kind)) return;
+    this.seen.add(kind);
+    const c = CAST[kind];
+    if (!c || this.state === 'title') return;
+    this.ui.callout(c);
+    this.audio.callout();
   }
 
   roundCleared() {
@@ -593,6 +661,9 @@ export class Game {
     const gens = this.models.slice(-MAX_ECHOES);
     gens.forEach((m, i) => this.spawnEcho(m, i, gens.length));
     this.roundEchoes = gens.length;
+    this.bossSpawned = false;
+    this.mirrorT = 3;
+    this.leechT = range(5, 7);
     const newest = gens[gens.length - 1];
     const P = newest.personality;
     const sub = P ? `GEN ${newest.gen} — ${P.name} ${P.line}.` : newest.label;
@@ -744,9 +815,21 @@ export class Game {
       z = Math.sin(a) * r;
       if (Math.hypot(x - p.x, z - p.z) > 9) break;
     }
-    const d = kind === 'byte' ? new Byte(this.scene, x, z) : new Bit(this.scene, x, z);
+    if (kind === 'leech') {
+      const n = LEECH.pack[0] + Math.floor(rand() * (LEECH.pack[1] - LEECH.pack[0] + 1));
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2;
+        this.drones.push(new Leech(this.scene, x + Math.cos(a) * 1.1, z + Math.sin(a) * 1.1));
+      }
+      this.rings.spawn(x, z, C.pink, 2.6, 0.5, 0.7, 0.8);
+      this.introduce('leech');
+      return;
+    }
+    const Kind = { byte: Byte, mirror: Mirror, warden: Warden }[kind] || Bit;
+    const d = new Kind(this.scene, x, z);
     this.drones.push(d);
-    this.rings.spawn(x, z, d.color, 2.2, 0.5, 0.7, 0.8);
+    this.rings.spawn(x, z, d.color, kind === 'warden' ? 4 : 2.2, 0.5, 0.7, 0.8);
+    this.introduce(kind);
   }
 
   collide() {
@@ -764,7 +847,18 @@ export class Game {
         }
         if (b.dead) continue;
         for (const d of this.drones) {
-          if (d.active && hit(b, d)) {
+          if (!d.active) continue;
+          if (d.kind === 'warden' && d.shielded) {
+            // The shield eats bullets at the ring.
+            if (Math.hypot(b.x - d.x, b.z - d.z) < WARDEN.shieldR) {
+              b.dead = true;
+              this.particles.spray(b.x, 0.6, b.z, -b.vx, -b.vz, C.acid, 3, 6);
+              this.audio.wardenShield();
+              break;
+            }
+            continue;
+          }
+          if (hit(b, d)) {
             b.dead = true;
             this.hitDrone(d, b);
             break;
@@ -773,17 +867,33 @@ export class Game {
       } else if (p.alive && hit(b, p) && p.invuln <= 0) {
         b.dead = true;
         this.hurtPlayer(b.vx, b.vz, b.color);
+        if (b.src === 'echo' || b.src === 'mirror') this.ui.pulsePredict();
       }
     }
     if (!p.alive) return;
     for (const d of this.drones) {
-      if (!d.active || d.kind !== 'bit') continue;
-      if (Math.hypot(d.x - p.x, d.z - p.z) < d.radius + p.radius) {
+      if (!d.active || (d.kind !== 'bit' && d.kind !== 'leech' && d.kind !== 'mirror')) continue;
+      if (Math.hypot(d.x - p.x, d.z - p.z) >= d.radius + p.radius) continue;
+      if (d.kind === 'leech') {
+        // Leeches drain score instead of health; dash through them to pop them.
         if (p.dashT > 0) this.killDrone(d, true);
-        else if (p.invuln <= 0) {
+        else {
+          const drain = Math.min(this.score, LEECH.drain);
+          this.score -= drain;
           this.killDrone(d, false);
-          this.hurtPlayer(d.vx, d.vz, d.color);
+          this.audio.leechDrain();
+          if (drain > 0) this.ui.toast(`LEECHED −${drain}`, 'var(--acc-pink)');
         }
+      } else if (d.kind === 'mirror') {
+        // Walking back into your own old route hurts.
+        if (p.dashT <= 0 && p.invuln <= 0) {
+          this.hurtPlayer(d.vx, d.vz, d.color);
+          this.ui.pulsePredict();
+        }
+      } else if (p.dashT > 0) this.killDrone(d, true);
+      else if (p.invuln <= 0) {
+        this.killDrone(d, false);
+        this.hurtPlayer(d.vx, d.vz, d.color);
       }
     }
     for (const e of this.echoes) {
@@ -805,6 +915,7 @@ export class Game {
   hitEcho(e, b) {
     e.hurt(1);
     this.player.hits++;
+    this.particles.hitFlash(b.x, 0.6, b.z, e.color);
     e.vx += b.vx * 0.03;
     e.vz += b.vz * 0.03;
     this.particles.spray(b.x, 0.6, b.z, -b.vx, -b.vz, e.color, 6, 9);
@@ -822,6 +933,7 @@ export class Game {
   hitDrone(d, b) {
     d.hurt(1);
     this.player.hits++;
+    this.particles.hitFlash(b.x, 0.6, b.z, d.color);
     this.particles.spray(b.x, 0.6, b.z, -b.vx, -b.vz, d.color, 4, 7);
     this.audio.enemyHit();
     if (!d.alive) this.killDrone(d, true);
@@ -829,10 +941,15 @@ export class Game {
 
   killDrone(d, scored) {
     d.alive = false;
-    this.particles.burst(d.x, 0.6, d.z, d.color, 16, 7, 0.5, 1);
-    this.rings.spawn(d.x, d.z, d.color, 0.3, 2.2, 0.35, 0.8);
-    this.audio.explode(0.22);
-    this.shake.add(0.12);
+    const big = d.kind === 'warden' ? 1.6 : d.kind === 'mirror' ? 1 : 0.6;
+    this.particles.deathBurst(d.x, d.z, d.color, big);
+    this.rings.spawn(d.x, d.z, d.color, 0.3, 2.2 * big, 0.35, 0.8);
+    this.audio.explode(d.kind === 'warden' ? 1 : 0.22);
+    this.shake.add(0.12 * big);
+    if (d.kind === 'warden') {
+      this.hitStop = 0.12;
+      if (scored) this.ui.toast(`WARDEN DOWN +${d.score}`, 'var(--acc-acid)');
+    }
     if (scored) this.score += d.score;
   }
 

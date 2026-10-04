@@ -635,11 +635,8 @@ export class AudioEngine {
   // ---- music ----
   startMusic() {
     this._music = true;
-    this._run((c, now) => {
-      if (c.playing) return;
-      c.startMusic(now + 0.06);
-      this._tick();
-    });
+    this._run((c, now) => c.playing || c.startMusic(now + 0.06));
+    this._tick(); // schedule the first notes now, not on the next timer tick
   }
   stopMusic() {
     this._music = false;
@@ -722,11 +719,10 @@ export class AudioEngine {
     }
   }
   _sfx(name, args) {
-    if (!this._core || this._muted || this._ctx.state !== 'running') return;
-    this._run((c, now) => c.sfx(name, now + SFX_LEAD, args));
+    if (this.ready && !this._muted) this._run((c, now) => c.sfx(name, now + SFX_LEAD, args));
   }
   _tick() {
-    if (this._ctx && this._ctx.state === 'running') this._run((c, now) => c.advance(now + AHEAD, now));
+    if (this.ready) this._run((c, now) => c.advance(now + AHEAD, now));
   }
   _applyVolume() {
     this._run((c, now) => c.R.master.gain.setTargetAtTime(this._muted ? 0 : this._vol, now, 0.02));

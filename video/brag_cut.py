@@ -26,8 +26,9 @@ game_dir, card_dir, out_dir = sys.argv[1:4]
 
 # (trailer time, duration) — hook, reveal, three highlights, punchline, CTA.
 CUTS = [
-    (0.0, 2.4),    # hook: WHAT IF THE FINAL BOSS WAS YOU?
-    (5.0, 2.0),    # reveal: SELF PLAY
+    (0.2, 1.6),    # studio intro: KS mark — made by Team Kanban
+    (2.0, 2.4),    # hook: WHAT IF THE FINAL BOSS WAS YOU?
+    (6.0, 2.0),    # reveal: SELF PLAY
     (10.2, 2.5),   # it records 15 decisions a second
     (21.0, 2.6),   # a neural net learns you in milliseconds
     (24.6, 2.4),   # THE ORBITER profile
@@ -98,13 +99,14 @@ s = cut_starts
 events += [
     {'t': 0, 'name': 'startMusic', 'args': []},
     {'t': 0, 'name': 'setIntensity', 'args': [1]},
-    {'t': s[1], 'name': 'roundStart', 'args': []},
-    {'t': s[2], 'name': 'setIntensity', 'args': [2]},
-    {'t': s[3], 'name': 'setDuck', 'args': [0.5]},
-    {'t': s[5], 'name': 'setDuck', 'args': [0]},
-    {'t': s[5], 'name': 'setIntensity', 'args': [3]},
-    {'t': s[7], 'name': 'roundClear', 'args': []},
-    {'t': s[8], 'name': 'setIntensity', 'args': [1]},
+    {'t': 0.1, 'name': 'echoSpawn', 'args': []},
+    {'t': s[2], 'name': 'roundStart', 'args': []},
+    {'t': s[3], 'name': 'setIntensity', 'args': [2]},
+    {'t': s[4], 'name': 'setDuck', 'args': [0.5]},
+    {'t': s[6], 'name': 'setDuck', 'args': [0]},
+    {'t': s[6], 'name': 'setIntensity', 'args': [3]},
+    {'t': s[8], 'name': 'roundClear', 'args': []},
+    {'t': s[9], 'name': 'setIntensity', 'args': [1]},
 ]
 events.sort(key=lambda e: e['t'])
 ev_path = os.path.join(work, 'events.json')

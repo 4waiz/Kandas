@@ -3,7 +3,7 @@
 // outlines and neon accents that feed the bloom pass.
 
 import * as THREE from 'three';
-import { ARENA_R, PLAYER, ECHO, BIT, BYTE, C, SAMPLE_HZ, echoColor } from './config.js';
+import { ARENA_R, PLAYER, ECHO, BIT, BYTE, LEECH, MIRROR, WARDEN, C, SAMPLE_HZ, echoColor } from './config.js';
 import { rand, range, gauss, chance } from './rng.js';
 import { Frame, extractFeatures, decide, newDecision, classDir, expectedLocalDir, DIM } from './brain.js';
 
@@ -32,6 +32,10 @@ function shared() {
     core: new THREE.IcosahedronGeometry(0.22, 1),
     bulletP: new THREE.CapsuleGeometry(0.09, 0.55, 2, 6),
     bulletE: new THREE.IcosahedronGeometry(0.24, 1),
+    leech: new THREE.ConeGeometry(0.3, 0.85, 4).rotateX(Math.PI / 2),
+    mirror: new THREE.IcosahedronGeometry(0.62, 0),
+    warden: new THREE.DodecahedronGeometry(1.0, 0),
+    wardenRing: new THREE.TorusGeometry(WARDEN.shieldR, 0.07, 6, 72),
     bodyMat: new THREE.MeshToonMaterial({ color: 0xece4d2, gradientMap: grad }),
     outlineMat: new THREE.MeshBasicMaterial({ color: 0x0e0b14, side: THREE.BackSide }),
     shadowMat: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false }),
@@ -574,6 +578,215 @@ export class Byte {
     this.hp -= dmg;
     this.flash = 1;
     if (this.hp <= 0) this.alive = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The cast. Leeches swarm and drain score; Mirrors replay your own path two
+// seconds late; Wardens are shielded bosses you open up by dashing through
+// their ring.
+
+export class Leech {
+  constructor(scene, x, z) {
+    this.kind = 'leech';
+    this.mesh = droneMesh(shared().leech, C.pink, 2.4);
+    scene.add(this.mesh);
+    this.x = x;
+    this.z = z;
+    this.vx = this.vz = 0;
+    this.radius = LEECH.radius;
+    this.hp = LEECH.hp;
+    this.alive = true;
+    this.spawnT = 0;
+    this.speed = LEECH.speed * range(0.88, 1.12);
+    this.phase = rand() * 10;
+    this.score = LEECH.score;
+    this.color = C.pink;
+  }
+  get active() {
+    return this.alive && this.spawnT >= 1;
+  }
+  update(dt, game) {
+    this.spawnT = Math.min(1, this.spawnT + dt / 0.5);
+    if (this.spawnT < 1) {
+      this.mesh.position.set(this.x, 2 * (1 - this.spawnT), this.z);
+      this.mesh.scale.setScalar(this.spawnT);
+      return;
+    }
+    const p = game.player;
+    let dx = p.x - this.x;
+    let dz = p.z - this.z;
+    const d = Math.hypot(dx, dz) || 1;
+    dx /= d;
+    dz /= d;
+    this.phase += dt * 9;
+    const w = Math.sin(this.phase) * 0.6;
+    steer(this, dx - dz * w, dz + dx * w, this.speed, 6, dt);
+    this.x += this.vx * dt;
+    this.z += this.vz * dt;
+    clampToArena(this, this.radius);
+    this.mesh.position.set(this.x, 0.4, this.z);
+    this.mesh.scale.setScalar(1);
+    this.mesh.userData.spin.rotation.set(0, Math.atan2(this.vx, this.vz), 0);
+  }
+  hurt(dmg) {
+    this.hp -= dmg;
+    if (this.hp <= 0) this.alive = false;
+  }
+}
+
+export class Mirror {
+  constructor(scene, x, z) {
+    this.kind = 'mirror';
+    this.mesh = droneMesh(shared().mirror, C.violet, 2.4);
+    scene.add(this.mesh);
+    this.x = x;
+    this.z = z;
+    this.vx = this.vz = 0;
+    this.radius = MIRROR.radius;
+    this.hp = MIRROR.hp;
+    this.alive = true;
+    this.spawnT = 0;
+    this.score = MIRROR.score;
+    this.color = C.violet;
+    this.fireT = range(1, MIRROR.fireEvery);
+    this.pop = 0;
+  }
+  get active() {
+    return this.alive && this.spawnT >= 1;
+  }
+  update(dt, game) {
+    this.spawnT = Math.min(1, this.spawnT + dt / 0.8);
+    const u = this.mesh.userData;
+    if (this.spawnT < 1) {
+      this.mesh.position.set(this.x, 2.5 * (1 - this.spawnT), this.z);
+      this.mesh.scale.setScalar(this.spawnT);
+      return;
+    }
+    // Walk exactly where you were MIRROR.delay seconds ago.
+    const p = game.player;
+    const past = game.trailAt(MIRROR.delay) || p;
+    const dx = past.x - this.x;
+    const dz = past.z - this.z;
+    const d = Math.hypot(dx, dz);
+    if (d > 0.01) steer(this, dx / d, dz / d, Math.min(MIRROR.maxSpeed, d * 4), 10, dt);
+    this.x += this.vx * dt;
+    this.z += this.vz * dt;
+    clampToArena(this, this.radius);
+
+    // Fire where the model says you're headed.
+    this.fireT -= dt;
+    if (this.fireT <= 0 && p.alive) {
+      this.fireT = MIRROR.fireEvery * range(0.85, 1.15);
+      const pr = game.prediction;
+      const lead = Math.hypot(p.x - this.x, p.z - this.z) / MIRROR.bulletSpeed;
+      const vx = pr.confidence ? pr.vx : p.vx;
+      const vz = pr.confidence ? pr.vz : p.vz;
+      const ax = p.x + vx * lead - this.x;
+      const az = p.z + vz * lead - this.z;
+      const al = Math.hypot(ax, az) || 1;
+      game.bullets.spawn('enemy', this.x + (ax / al) * 0.8, this.z + (az / al) * 0.8, ax / al, az / al, MIRROR.bulletSpeed, 2.2, C.violet, 1, 0, 'mirror');
+      game.audio.mirrorShoot();
+      this.pop = 1;
+    }
+    this.pop = Math.max(0, this.pop - dt * 5);
+    this.mesh.position.set(this.x, 0.7, this.z);
+    this.mesh.scale.setScalar(1 + this.pop * 0.25);
+    u.spin.rotation.y += dt * 1.8;
+    u.spin.rotation.z += dt * 0.9;
+  }
+  hurt(dmg) {
+    this.hp -= dmg;
+    this.pop = 1;
+    if (this.hp <= 0) this.alive = false;
+  }
+}
+
+export class Warden {
+  constructor(scene, x, z) {
+    this.kind = 'warden';
+    this.mesh = droneMesh(shared().warden, C.acid, 2.0);
+    scene.add(this.mesh);
+    this.ringMat = new THREE.MeshBasicMaterial({ color: neon(C.acid, 2.2), transparent: true, opacity: 0.9, depthWrite: false, toneMapped: false });
+    this.ring = new THREE.Mesh(shared().wardenRing, this.ringMat);
+    this.ring.rotation.x = Math.PI / 2;
+    this.ring.position.y = -0.75;
+    this.mesh.add(this.ring);
+    this.x = x;
+    this.z = z;
+    this.vx = this.vz = 0;
+    this.radius = WARDEN.radius;
+    this.hp = WARDEN.hp;
+    this.alive = true;
+    this.spawnT = 0;
+    this.score = WARDEN.score;
+    this.color = C.acid;
+    this.openT = 0;
+    this.wasInside = false;
+    this.volleyT = 2;
+    this.t = 0;
+  }
+  get active() {
+    return this.alive && this.spawnT >= 1;
+  }
+  get shielded() {
+    return this.openT <= 0;
+  }
+  update(dt, game) {
+    this.t += dt;
+    this.spawnT = Math.min(1, this.spawnT + dt / 1.0);
+    const u = this.mesh.userData;
+    if (this.spawnT < 1) {
+      this.mesh.position.set(this.x, 0.9 + 4 * (1 - this.spawnT), this.z);
+      this.mesh.scale.setScalar(this.spawnT);
+      return;
+    }
+    const p = game.player;
+    const dx = p.x - this.x;
+    const dz = p.z - this.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const radial = d > 7 ? 1 : d < 5 ? -0.6 : 0;
+    steer(this, (dx / d) * radial, (dz / d) * radial, WARDEN.speed, 2, dt);
+    this.x += this.vx * dt;
+    this.z += this.vz * dt;
+    clampToArena(this, this.radius);
+
+    // Dashing across the ring (in either direction) breaks the shield.
+    const inside = d < WARDEN.shieldR;
+    if (inside !== this.wasInside && p.dashT > 0 && this.shielded && p.alive) {
+      this.openT = WARDEN.openTime;
+      game.onWardenBreak(this);
+    }
+    this.wasInside = inside;
+    this.openT = Math.max(0, this.openT - dt);
+
+    this.volleyT -= dt;
+    if (this.volleyT <= 0 && p.alive) {
+      this.volleyT = WARDEN.volleyEvery;
+      const off = rand() * Math.PI * 2;
+      for (let k = 0; k < WARDEN.volley; k++) {
+        const a = off + (k / WARDEN.volley) * Math.PI * 2;
+        game.bullets.spawn('enemy', this.x + Math.cos(a) * 1.4, this.z + Math.sin(a) * 1.4, Math.cos(a), Math.sin(a), WARDEN.bulletSpeed, 3.2, C.acid, 1, 0, 'warden');
+      }
+      game.audio.enemyShoot();
+    }
+
+    // Shield up: steady glowing ring. Open: ring gone, flickering back as it recovers.
+    const recovering = this.openT > 0 && this.openT < 0.8;
+    this.ring.visible = this.shielded || (recovering && Math.floor(this.t * 14) % 2 === 0);
+    this.ringMat.opacity = 0.65 + 0.3 * Math.sin(this.t * 5);
+    u.core.scale.setScalar(this.shielded ? 0.6 : 0.95 + Math.sin(this.t * 20) * 0.15);
+    this.mesh.position.set(this.x, 0.9, this.z);
+    this.mesh.scale.setScalar(1);
+    u.spin.rotation.y += dt * 0.8;
+  }
+  hurt(dmg) {
+    if (this.shielded) return;
+    this.hp -= dmg;
+    if (this.hp <= 0) this.alive = false;
+  }
+  dispose() {
+    this.ringMat.dispose();
   }
 }
 

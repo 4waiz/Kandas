@@ -14,7 +14,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const BASE = process.env.BASE || 'http://127.0.0.1:8766';
-const SHARE_BASE = 'https://4waiz.github.io/Kandas/';
+const SHARE_BASE = 'https://4waiz.github.io/self-play/';
 const timeline = JSON.parse(fs.readFileSync(path.join(__dirname, 'timeline.json'), 'utf8'));
 const FPS = timeline.fps;
 const seg = Object.fromEntries(timeline.segments.map((s) => [s.id, s]));

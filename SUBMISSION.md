@@ -27,9 +27,9 @@ A three.js shooter where a neural net learns how you play, live in your browser,
 SELF PLAY is a three.js arena shooter where a neural network trains on how you play, live in your browser, then spawns as your Echo: a clone that moves like you and predicts your next move. To win, break your own habits. Then send your clone to a friend as a link.
 
 **Links**
-- Play (no install, desktop + mobile + gamepad): https://4waiz.github.io/Kandas/
-- Code: https://github.com/4waiz/Kandas
-- Trailer (90 s, direct link): https://4waiz.github.io/Kandas/trailer.mp4 (also `media/self-play-trailer.mp4` in the repo)
+- Play (no install, desktop + mobile + gamepad): https://4waiz.github.io/self-play/
+- Code: https://github.com/4waiz/self-play
+- Trailer (90 s, direct link): https://4waiz.github.io/self-play/trailer.mp4 (also `media/self-play-trailer.mp4` in the repo)
 - Team: https://kanbanstudios.ae/team-kanban
 
 ---
@@ -40,7 +40,7 @@ SELF PLAY is a three.js arena shooter where a neural network trains on how you p
 
 For the first 25 seconds of SELF PLAY you just play: move, aim, dash and shoot drones. The game quietly records 15 of your decisions every second. Each one leaves a glowing dot on the floor where you stood. When the round ends, the dots lift off and stream into a neural network floating above the arena. You watch it train on your data, with a live loss curve, epochs and flickering weights. It happens in the browser, in milliseconds.
 
-Then the game tells you what it learned: *"THE ORBITER — you circle counter-clockwise 94% of the time, you dash about every 2 seconds, you fight from ~8 m."* Your **Echo** spawns: a holographic clone whose every move comes from that network. It strafes the way you strafe and dashes when you'd dash.
+Then the game tells you what it learned: *"THE ORBITER — you circle counter-clockwise 93% of the time, you push forward more than you retreat, you dash about every 2.4 s."* Your **Echo** spawns: a holographic clone whose every move comes from that network. It strafes the way you strafe and dashes when you'd dash.
 
 The same model also **predicts you**. A live PREDICTABILITY meter shows how often it guesses your next move. A pink ghost marks where it thinks you're going, and your Echoes aim there. The only counter-play is to break your own habits, and the game rewards it with an unpredictability bonus every round. Each round the network retrains on your newest moves, and every past generation of you comes back to fight.
 
@@ -67,7 +67,7 @@ three.js (WebGL, instanced rendering, UnrealBloom plus a custom ink/grain/glitch
 
 ## How to play (for judges, ~2 minutes)
 
-1. Open https://4waiz.github.io/Kandas/ and press **Start calibration**.
+1. Open https://4waiz.github.io/self-play/ and press **Start calibration**.
 2. **Just play for 25 s.** WASD moves, the mouse aims, click shoots, Space dashes. (On mobile: left thumb moves, right thumb aims and fires.)
 3. Watch the network train on you, read your profile, then **fight your Echo**. Watch the PREDICTABILITY meter and try to beat it by changing your habits.
 4. When you lose, sign your Echo and **copy the challenge link**. Open it in another tab to duel your own clone.

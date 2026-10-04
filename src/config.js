@@ -62,5 +62,5 @@ export const echoColor = (gen) => ECHO_COLORS[(gen - 1) % ECHO_COLORS.length];
 
 export const LINKS = {
   team: 'https://kanbanstudios.ae/team-kanban',
-  repo: 'https://github.com/4waiz/Kandas',
+  repo: 'https://github.com/4waiz/self-play',
 };

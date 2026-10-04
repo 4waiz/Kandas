@@ -4,7 +4,7 @@
 
 > **A three.js arena shooter where a neural network trains on how *you* play — live, in your browser — then becomes your rival and predicts your next move.**
 
-**▶ Play:** https://4waiz.github.io/Kandas/ &nbsp;·&nbsp; **🎬 Trailer:** [watch](https://4waiz.github.io/Kandas/trailer.mp4) · [`media/self-play-trailer.mp4`](media/self-play-trailer.mp4) &nbsp;·&nbsp; **Built by [Team Kanban](https://kanbanstudios.ae/team-kanban) — by Awaiz Ahmed** &nbsp;·&nbsp; Tencent × Arcade AI Hackathon · Cambridge 2026 (Game Tech track)
+**▶ Play:** https://4waiz.github.io/self-play/ &nbsp;·&nbsp; **🎬 Trailer:** [watch](https://4waiz.github.io/self-play/trailer.mp4) · [`media/self-play-trailer.mp4`](media/self-play-trailer.mp4) &nbsp;·&nbsp; **Built by [Team Kanban](https://kanbanstudios.ae/team-kanban) — by Awaiz Ahmed** &nbsp;·&nbsp; Tencent × Arcade AI Hackathon · Cambridge 2026 (Game Tech track)
 
 ---
 

@@ -1,19 +1,17 @@
 /**
- * SELF PLAY — procedural audio engine.
+ * SELF PLAY — procedural audio engine (WebAudio only: no samples, no dependencies).
  *
- * Pure WebAudio: no samples, no dependencies. Every sound is a plain function
- * `(ctx, dest, when, ...args)`, so the same code drives the realtime AudioContext
- * and the OfflineAudioContext used for trailer renders.
+ * Every sound is a plain function `(ctx, dest, when, ...args)`, so one code path drives both the
+ * realtime AudioContext and the OfflineAudioContext used for trailer renders.
  *
- * Graph (one per context):
  *   music voices → session buses ─┬→ musicIn → duck LP → duck gain → −6 dB ─┐
- *                                 ├→ ping-pong delay ──↗                    ├→ bus → limiter → volume → soft clip → out
- *                                 └→ reverb ───────────↗                    │
- *   sfx voices → per-voice gain (voice cap) → sfx ──────────────────────────┘
+ *                                 ├→ ping-pong delay ─↗                     ├→ bus → limiter → volume → soft clip → out
+ *                                 └→ reverb ──────────↗                     │
+ *   sfx voices → per-voice gain (cap / steal) → sfx ────────────────────────┘
  *                                    └→ short echo ↗
  *
- * Usage: `const audio = new AudioEngine()`; call `audio.init()` from the first (and any later)
- * click/keydown. Everything before that is a silent no-op; music state set early is remembered.
+ * Usage: `const audio = new AudioEngine()` at load, `audio.init()` on every click/keydown (the first one
+ * creates the AudioContext). Earlier calls are silent no-ops; startMusic/intensity/duck state is remembered.
  */
 
 // ─── timing & tuning ────────────────────────────────────────────────────────
@@ -31,6 +29,9 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const num = (v, d) => (v != null && Number.isFinite(+v) ? +v : d);
 const toLevel = (l) => clamp(Math.round(num(l, 0)), 0, 3);
 const quiet = (p) => p && p.catch && p.catch(() => {});
+const create = (C, opts, legacyArgs) => {
+  try { return new C(opts); } catch { return new C(...legacyArgs); } // options bag, else older WebKit signatures
+};
 let warnings = 0;
 const warn = (e) => warnings++ < 5 && console.warn('[audio]', e);
 
@@ -65,7 +66,7 @@ function mulberry32(a) {
 const curve = (fn, n = 4097) => Float32Array.from({ length: n }, (_, i) => fn((i / (n - 1)) * 2 - 1));
 const CRUSH = curve((x) => Math.round(x * 6) / 6); // ~3.7-bit amplitude quantiser ("bitcrush")
 const SOFT = curve((x) => {
-  const a = Math.abs(x); // linear to 0.7, then tanh knee that never exceeds 0.91 (≈ −0.8 dBFS)
+  const a = Math.abs(x); // linear to 0.7, then a tanh knee that never exceeds 0.91 (≈ −0.8 dBFS)
   return a < 0.7 ? x : Math.sign(x) * (0.7 + 0.25 * Math.tanh((a - 0.7) / 0.25));
 });
 
@@ -74,23 +75,18 @@ const RIGS = new WeakMap();
 const rig = (ctx) => RIGS.get(ctx);
 
 function buildRig(ctx, seed) {
-  const sr = ctx.sampleRate;
-  const R = {
-    mrand: seed == null ? Math.random : mulberry32(seed), // music
-    srand: seed == null ? Math.random : mulberry32(seed + 1013), // sfx (separate stream)
-    noise: ctx.createBuffer(1, Math.floor(sr * 2), sr),
-  };
+  const sr = ctx.sampleRate, R = { noise: ctx.createBuffer(1, Math.floor(sr * 2), sr) };
+  R.mrand = seed == null ? Math.random : mulberry32(seed); // music
+  R.srand = seed == null ? Math.random : mulberry32(seed + 1013); // sfx (separate stream)
   const nr = mulberry32(0x5e1f), nd = R.noise.getChannelData(0);
   for (let i = 0; i < nd.length; i++) nd[i] = nr() * 2 - 1;
 
   // master: bus → gentle limiter → volume → soft clip (safety net) → out
-  R.bus = gain(ctx, 1.15);
-  const comp = ctx.createDynamicsCompressor();
-  const cp = { threshold: -12, knee: 8, ratio: 4, attack: 0.004, release: 0.2 };
-  for (const k in cp) comp[k].value = cp[k];
-  R.master = gain(ctx, 0);
-  const clip = ctx.createWaveShaper();
+  const comp = ctx.createDynamicsCompressor(), clip = ctx.createWaveShaper();
+  Object.entries({ threshold: -12, knee: 8, ratio: 4, attack: 0.004, release: 0.2 }).forEach(([k, v]) => (comp[k].value = v));
   clip.curve = SOFT;
+  R.bus = gain(ctx, 1.15);
+  R.master = gain(ctx, 0);
   R.bus.connect(comp).connect(R.master).connect(clip).connect(ctx.destination);
 
   // music: in → duck low-pass (moved via detune = log sweep) → duck gain → −6 dB → bus
@@ -100,29 +96,26 @@ function buildRig(ctx, seed) {
   R.musicIn.connect(R.duckLP).connect(R.duckG).connect(gain(ctx, 0.5)).connect(R.bus);
 
   // ping-pong dotted-8th delay
-  R.dlyIn = filt(ctx, 'highpass', 280, -3);
   const dl = ctx.createDelay(1), dr = ctx.createDelay(1), mix = ctx.createChannelMerger(2);
   dl.delayTime.value = dr.delayTime.value = STEP * 3;
+  R.dlyIn = filt(ctx, 'highpass', 280, -3);
   R.dlyIn.connect(dl).connect(gain(ctx, 0.55)).connect(dr).connect(filt(ctx, 'lowpass', 2600, -3)).connect(gain(ctx, 0.55)).connect(dl);
   dl.connect(mix, 0, 0);
   dr.connect(mix, 0, 1);
   mix.connect(gain(ctx, 0.5)).connect(R.musicIn);
 
   // reverb from a synthetic stereo IR (fixed seed → realtime and offline match)
-  R.revIn = filt(ctx, 'highpass', 220, -3);
   const cv = ctx.createConvolver();
   cv.buffer = makeIR(ctx, 2.4);
+  R.revIn = filt(ctx, 'highpass', 220, -3);
   R.revIn.connect(cv).connect(gain(ctx, 0.6)).connect(R.musicIn);
 
   // sfx bus + short feedback echo (sonar, stingers)
-  R.sfx = gain(ctx, 1);
-  R.sfx.connect(R.bus);
-  R.echo = ctx.createDelay(1);
-  R.echo.delayTime.value = 0.21;
   const eLP = filt(ctx, 'lowpass', 2400, -3);
+  (R.sfx = gain(ctx, 1)).connect(R.bus);
+  (R.echo = ctx.createDelay(1)).delayTime.value = 0.21;
   R.echo.connect(eLP).connect(gain(ctx, 0.35)).connect(R.echo);
   eLP.connect(gain(ctx, 0.5)).connect(R.sfx);
-
   RIGS.set(ctx, R);
   return R;
 }
@@ -131,8 +124,7 @@ function makeIR(ctx, secs) {
   const sr = ctx.sampleRate, n = Math.floor(sr * secs), ir = ctx.createBuffer(2, n, sr), rnd = mulberry32(0x1e57);
   for (let c = 0; c < 2; c++) {
     const d = ir.getChannelData(c);
-    let lp = 0;
-    for (let i = Math.floor(sr * 0.012); i < n; i++) {
+    for (let i = Math.floor(sr * 0.012), lp = 0; i < n; i++) {
       const x = i / n;
       lp += (0.6 - 0.5 * x) * (rnd() * 2 - 1 - lp); // tail darkens over time
       d[i] = lp * (1 - x) ** 2.5;
@@ -151,8 +143,7 @@ function filt(ctx, type, f, q) {
   const b = ctx.createBiquadFilter();
   b.type = type;
   try {
-    // coefficients once per 128-frame block instead of per sample: ~3x cheaper for swept filters
-    for (const p of [b.frequency, b.detune, b.Q]) p.automationRate = 'k-rate';
+    for (const p of [b.frequency, b.detune, b.Q]) p.automationRate = 'k-rate'; // per-block coefficients: ~3x cheaper sweeps
   } catch {}
   b.frequency.value = f;
   b.Q.value = q ?? (type === 'bandpass' ? 1 : 0);
@@ -164,13 +155,37 @@ function pan(ctx, p) {
   s.pan.value = p;
   return s;
 }
+/** Oscillator into dest, running t..end. */
+function osc(ctx, dest, type, f, t, end, det = 0) {
+  const o = ctx.createOscillator();
+  o.type = type;
+  o.frequency.value = f;
+  o.detune.value = det;
+  o.connect(dest);
+  o.start(t);
+  o.stop(end);
+  return o;
+}
+/** Looping white noise into dest, running t..end (start offset derived from t: varied yet deterministic). */
+function noise(ctx, dest, t, end) {
+  const s = ctx.createBufferSource();
+  s.buffer = rig(ctx).noise;
+  s.loop = true;
+  s.connect(dest);
+  s.start(t, (t * 0.731) % 1.8);
+  s.stop(end);
+}
+const slide = (param, from, to, t0, t1) => {
+  param.setValueAtTime(from, t0);
+  param.exponentialRampToValueAtTime(to, t1);
+};
 const crusher = (ctx) => Object.assign(ctx.createWaveShaper(), { curve: CRUSH });
 const send = (ctx, node, amt) => node.connect(gain(ctx, amt)).connect(rig(ctx).echo);
 
 /** Click-free envelope: 0 → peak (linear a) → hold → exponential decay d → exact 0. Returns end time. */
 function env(param, t, peak, a, d, hold = 0) {
   const p = Math.max(peak, 1e-4), e = t + a + hold + d;
-  param.value = 0; // silent before t too: a source may start on the frame just before t
+  param.value = 0; // silent before t as well: a source may start on the frame just before t
   param.setValueAtTime(0, t);
   param.linearRampToValueAtTime(p, t + a);
   if (hold > 0) param.setValueAtTime(p, t + a + hold);
@@ -179,75 +194,44 @@ function env(param, t, peak, a, d, hold = 0) {
   return e + 0.005;
 }
 
-/** Oscillator voice with optional exponential glide, low-pass and pan. Returns end time. */
+/** Enveloped oscillator with optional exponential glide, low-pass and pan. Returns end time. */
 function tone(ctx, dest, t, { type = 'sine', f, f1, glide = 0.05, a = 0.003, d = 0.15, hold = 0, peak = 0.2, lp, pn, det = 0 }) {
-  const o = ctx.createOscillator(), g = ctx.createGain();
-  o.type = type;
-  o.detune.value = det;
-  o.frequency.setValueAtTime(f, t);
-  if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + glide);
-  (lp ? o.connect(filt(ctx, 'lowpass', lp)) : o).connect(g);
+  const g = ctx.createGain(), end = env(g.gain, t, peak, a, d, hold), into = lp ? filt(ctx, 'lowpass', lp) : g;
+  if (lp) into.connect(g);
+  const o = osc(ctx, into, type, f, t, end, det);
+  if (f1) slide(o.frequency, f, f1, t, t + glide);
   (pn ? g.connect(pan(ctx, pn)) : g).connect(dest);
-  const end = env(g.gain, t, peak, a, d, hold);
-  o.start(t);
-  o.stop(end);
   return end;
 }
 
-/** Filtered noise burst with optional filter sweep. Returns end time. */
+/** Enveloped band of noise with optional filter sweep. Returns end time. */
 function hiss(ctx, dest, t, { type = 'bandpass', f, f1, sweep = 0.1, q, a = 0.002, d = 0.1, hold = 0, peak = 0.2, pn }) {
-  const src = ctx.createBufferSource(), bf = filt(ctx, type, f, q), g = ctx.createGain();
-  src.buffer = rig(ctx).noise;
-  src.loop = true;
-  bf.frequency.setValueAtTime(f, t);
-  if (f1) bf.frequency.exponentialRampToValueAtTime(f1, t + sweep);
-  src.connect(bf).connect(g);
+  const bf = filt(ctx, type, f, q), g = ctx.createGain(), end = env(g.gain, t, peak, a, d, hold);
+  if (f1) slide(bf.frequency, f, f1, t, t + sweep);
+  noise(ctx, bf, t, end);
+  bf.connect(g);
   (pn ? g.connect(pan(ctx, pn)) : g).connect(dest);
-  const end = env(g.gain, t, peak, a, d, hold);
-  src.start(t, (t * 0.731) % 1.8); // offset derived from time: varied, but deterministic
-  src.stop(end);
   return end;
 }
 
 /** Detuned-saw chord through a sweeping low-pass. Returns end time. */
-function stab(ctx, dest, t, notes, { peak = 0.05, a = 0.005, hold = 0, d = 0.4, cut = 2400, cut1 = 600, q = 3, det = 9 } = {}) {
-  const lp = filt(ctx, 'lowpass', cut, q), g = ctx.createGain();
-  const end = env(g.gain, t, peak, a, d, hold);
-  lp.frequency.setValueAtTime(cut, t);
-  lp.frequency.exponentialRampToValueAtTime(cut1, end);
+function stab(ctx, dest, t, notes, { peak = 0.05, a = 0.005, hold = 0, d = 0.4, cut = 2400, cut1 = 600, q = 3 } = {}) {
+  const lp = filt(ctx, 'lowpass', cut, q), g = ctx.createGain(), end = env(g.gain, t, peak, a, d, hold);
+  slide(lp.frequency, cut, cut1, t, end);
   lp.connect(g).connect(dest);
-  for (const m of notes) {
-    for (const s of [-1, 1]) {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.frequency.value = mtof(m);
-      o.detune.value = s * det;
-      o.connect(lp);
-      o.start(t);
-      o.stop(end);
-    }
-  }
+  for (const m of notes) for (const det of [-9, 9]) osc(ctx, lp, 'sawtooth', mtof(m), t, end, det);
   return end;
 }
 
 // ─── music voices ───────────────────────────────────────────────────────────
 /** Airy pad: two detuned saw layers panned apart, slow filter LFO, long crossfading release. */
 function pad(ctx, dest, t, notes, dur, cut, att, lvl) {
-  const end = t + dur + 2, g = gain(ctx, 0), lfo = ctx.createOscillator(), depth = gain(ctx, cut * 0.35);
-  lfo.frequency.value = 0.12;
-  lfo.connect(depth);
+  const end = t + dur + 2, g = gain(ctx, 0), depth = gain(ctx, cut * 0.35);
+  osc(ctx, depth, 'sine', 0.12, t, end); // filter LFO
   for (const s of [-1, 1]) {
     const lp = filt(ctx, 'lowpass', cut, 2);
     depth.connect(lp.frequency);
-    for (const m of notes) {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.frequency.value = mtof(m);
-      o.detune.value = s * 8;
-      o.connect(lp);
-      o.start(t);
-      o.stop(end);
-    }
+    for (const m of notes) osc(ctx, lp, 'sawtooth', mtof(m), t, end, s * 8);
     lp.connect(pan(ctx, s * 0.5)).connect(g);
   }
   g.gain.setValueAtTime(0, t);
@@ -255,43 +239,26 @@ function pad(ctx, dest, t, notes, dur, cut, att, lvl) {
   g.gain.setValueAtTime(lvl, t + Math.max(att, dur));
   g.gain.linearRampToValueAtTime(0, end);
   g.connect(dest);
-  lfo.start(t);
-  lfo.stop(end);
   return t + dur;
 }
 
 function pluck(ctx, dest, t, m, v, cut, pn) {
-  const lp = filt(ctx, 'lowpass', cut, 6), g = ctx.createGain();
-  lp.frequency.setValueAtTime(cut * 2.5, t);
-  lp.frequency.exponentialRampToValueAtTime(cut * 0.6, t + 0.2);
-  const end = env(g.gain, t, v, 0.003, 0.3);
-  for (const [type, det] of [['sawtooth', -5], ['square', 6]]) {
-    const o = ctx.createOscillator();
-    o.type = type;
-    o.frequency.value = mtof(m);
-    o.detune.value = det;
-    o.connect(lp);
-    o.start(t);
-    o.stop(end);
-  }
+  const lp = filt(ctx, 'lowpass', cut, 6), g = ctx.createGain(), end = env(g.gain, t, v, 0.003, 0.3);
+  slide(lp.frequency, cut * 2.5, cut * 0.6, t, t + 0.2);
+  osc(ctx, lp, 'sawtooth', mtof(m), t, end, -5);
+  osc(ctx, lp, 'square', mtof(m), t, end, 6);
   lp.connect(g).connect(pan(ctx, pn)).connect(dest);
 }
 
 function bass(ctx, dest, t, m, v, len, cut) {
-  const o = ctx.createOscillator(), sub = ctx.createOscillator(), lp = filt(ctx, 'lowpass', cut, 5), g = ctx.createGain();
-  o.type = 'sawtooth';
-  o.frequency.value = mtof(m);
-  sub.frequency.value = mtof(m - 12);
-  lp.frequency.setValueAtTime(cut * (1 + 2.5 * v), t);
-  lp.frequency.exponentialRampToValueAtTime(cut * 0.6, t + len);
-  o.connect(lp).connect(g);
-  sub.connect(gain(ctx, 0.5)).connect(g);
-  g.connect(dest);
+  const lp = filt(ctx, 'lowpass', cut, 5), sub = gain(ctx, 0.5), g = ctx.createGain();
   const end = env(g.gain, t, 0.12 * v, 0.005, 0.06, Math.max(0, len - 0.06));
-  for (const x of [o, sub]) {
-    x.start(t);
-    x.stop(end);
-  }
+  slide(lp.frequency, cut * (1 + 2.5 * v), cut * 0.6, t, t + len);
+  osc(ctx, lp, 'sawtooth', mtof(m), t, end);
+  osc(ctx, sub, 'sine', mtof(m - 12), t, end);
+  lp.connect(g);
+  sub.connect(g);
+  g.connect(dest);
 }
 
 function kick(ctx, dest, t, v) {
@@ -303,9 +270,7 @@ const hat = (ctx, dest, t, open, v) =>
   hiss(ctx, dest, t, { f: open ? 7200 : 8500, q: 0.9, a: 0.001, d: open ? 0.2 : 0.035, peak: v, pn: open ? -0.15 : 0.15 });
 
 function clap(ctx, dest, t, v) {
-  const src = ctx.createBufferSource(), g = gain(ctx, 0);
-  src.buffer = rig(ctx).noise;
-  src.loop = true;
+  const bp = filt(ctx, 'bandpass', 1300, 0.9), g = gain(ctx, 0);
   g.gain.setValueAtTime(0, t);
   for (let i = 0; i < 3; i++) {
     const h = t + i * 0.011; // three fast re-hits, then the tail
@@ -315,32 +280,19 @@ function clap(ctx, dest, t, v) {
   g.gain.linearRampToValueAtTime(v * 0.8, t + 0.035);
   g.gain.exponentialRampToValueAtTime(v * 1e-3, t + 0.26);
   g.gain.linearRampToValueAtTime(0, t + 0.265);
-  src.connect(filt(ctx, 'bandpass', 1300, 0.9)).connect(g).connect(dest);
-  src.start(t, (t * 0.917) % 1.8);
-  src.stop(t + 0.27);
+  noise(ctx, bp, t, t + 0.27);
+  bp.connect(g).connect(dest);
   tone(ctx, dest, t, { type: 'triangle', f: 210, f1: 165, glide: 0.06, d: 0.08, peak: v * 0.35 });
 }
 
 function lead(ctx, dest, t, m, len) {
-  const lp = filt(ctx, 'lowpass', 2300, 3), g = ctx.createGain(), vib = ctx.createOscillator(), depth = ctx.createGain();
-  vib.frequency.value = 5.3;
-  vib.connect(depth);
+  const lp = filt(ctx, 'lowpass', 2300, 3), g = ctx.createGain(), depth = gain(ctx, 0);
+  const end = env(g.gain, t, 0.06, 0.012, 0.22, Math.max(0, len - 0.04));
   depth.gain.setValueAtTime(0, t);
   depth.gain.linearRampToValueAtTime(9, t + 0.35); // delayed vibrato (cents)
-  const end = env(g.gain, t, 0.06, 0.012, 0.22, Math.max(0, len - 0.04));
-  for (const [type, det] of [['square', 0], ['sawtooth', 8]]) {
-    const o = ctx.createOscillator();
-    o.type = type;
-    o.frequency.value = mtof(m);
-    o.detune.value = det;
-    depth.connect(o.detune);
-    o.connect(lp);
-    o.start(t);
-    o.stop(end);
-  }
+  osc(ctx, depth, 'sine', 5.3, t, end);
+  for (const [type, det] of [['square', 0], ['sawtooth', 8]]) depth.connect(osc(ctx, lp, type, mtof(m), t, end, det).detune);
   lp.connect(g).connect(dest);
-  vib.start(t);
-  vib.stop(end);
 }
 
 /** 32nd-note bit-crushed stutters over the last beat of a phrase. */
@@ -362,31 +314,20 @@ const VOICES = {
     return tone(ctx, out, t, { type: 'triangle', f: 980 * k, f1: 360 * k, glide: 0.05, a: 0.002, d: 0.065, peak: 0.18, lp: 2800, pn: (r() - 0.5) * 0.3 });
   },
   echoShoot(ctx, out, t) {
-    const r = rig(ctx).srand, k = (1 + (r() - 0.5) * 0.12) * 0.7, ws = crusher(ctx), g = ctx.createGain();
-    ws.connect(filt(ctx, 'lowpass', 1600, 2)).connect(g).connect(out);
+    const k = (1 + (rig(ctx).srand() - 0.5) * 0.12) * 0.7, ws = crusher(ctx), pre = gain(ctx, 0.45), g = ctx.createGain();
+    pre.connect(ws).connect(filt(ctx, 'lowpass', 1600, 2)).connect(g).connect(out);
     for (const det of [-30, 30]) {
-      const o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.detune.value = det;
+      const o = osc(ctx, pre, 'sawtooth', 950 * k, t, t + 0.11, det);
       for (let i = 0; i < 4; i++) o.frequency.setValueAtTime(950 * k * 0.7 ** i, t + i * 0.018); // stair-stepped = "corrupted"
-      o.connect(gain(ctx, 0.45)).connect(ws);
-      o.start(t);
-      o.stop(t + 0.11);
     }
     return env(g.gain, t, 0.12, 0.002, 0.09);
   },
   enemyShoot(ctx, out, t) {
-    const k = 1 + (rig(ctx).srand() - 0.5) * 0.1, o = ctx.createOscillator(), lp = filt(ctx, 'lowpass', 220, 9), g = ctx.createGain();
-    o.type = 'sawtooth';
-    o.frequency.setValueAtTime(150 * k, t);
-    o.frequency.exponentialRampToValueAtTime(60 * k, t + 0.2);
-    lp.frequency.setValueAtTime(220, t); // resonant filter "bwomp"
-    lp.frequency.exponentialRampToValueAtTime(1500, t + 0.03);
+    const k = 1 + (rig(ctx).srand() - 0.5) * 0.1, lp = filt(ctx, 'lowpass', 220, 9), g = ctx.createGain(), end = env(g.gain, t, 0.2, 0.004, 0.24);
+    slide(osc(ctx, lp, 'sawtooth', 150 * k, t, end).frequency, 150 * k, 60 * k, t, t + 0.2);
+    slide(lp.frequency, 220, 1500, t, t + 0.03); // resonant filter "bwomp"
     lp.frequency.exponentialRampToValueAtTime(150, t + 0.24);
-    o.connect(lp).connect(g).connect(out);
-    const end = env(g.gain, t, 0.2, 0.004, 0.24);
-    o.start(t);
-    o.stop(end);
+    lp.connect(g).connect(out);
     tone(ctx, out, t, { f: 95 * k, f1: 48 * k, glide: 0.18, a: 0.004, d: 0.2, peak: 0.12 });
     return end;
   },
@@ -396,14 +337,12 @@ const VOICES = {
     return tone(ctx, out, t, { type: 'square', f: 2000 * k, f1: 1400 * k, glide: 0.025, a: 0.001, d: 0.03, peak: 0.045, lp: 4200 });
   },
   playerHurt(ctx, out, t) {
-    const R = rig(ctx), r = R.srand, ws = crusher(ctx), chop = ctx.createGain(), g = ctx.createGain();
-    const n = ctx.createBufferSource(), o = ctx.createOscillator();
+    const r = rig(ctx).srand, ws = crusher(ctx), sq = gain(ctx, 0.6), chop = ctx.createGain(), g = ctx.createGain();
+    const end = env(g.gain, t, 0.3, 0.002, 0.22, 0.04);
     tone(ctx, out, t, { f: 140, f1: 40, glide: 0.18, a: 0.003, d: 0.32, peak: 0.5 }); // low thud
-    n.buffer = R.noise;
-    o.type = 'square';
-    n.connect(ws);
-    o.connect(gain(ctx, 0.6)).connect(ws);
-    ws.connect(filt(ctx, 'bandpass', 1500, 0.5)).connect(chop).connect(g).connect(out);
+    const o = osc(ctx, sq, 'square', 440, t, end); // bit-crushed noise + random square stabs, chopped
+    noise(ctx, ws, t, end);
+    sq.connect(ws).connect(filt(ctx, 'bandpass', 1500, 0.5)).connect(chop).connect(g).connect(out);
     chop.gain.setValueAtTime(1, t);
     for (let i = 0, lv = 1; i < 12; i++) {
       const tt = t + i * 0.022, nv = r() < 0.4 ? 0.15 : 1; // 22 ms glitch slices
@@ -414,11 +353,6 @@ const VOICES = {
       }
       lv = nv;
     }
-    const end = env(g.gain, t, 0.3, 0.002, 0.22, 0.04);
-    n.start(t, (t * 0.37) % 1.5);
-    o.start(t);
-    n.stop(end);
-    o.stop(end);
     return Math.max(end, t + 0.33);
   },
   explode(ctx, out, t, size = 0.5) {
@@ -436,27 +370,22 @@ const VOICES = {
     return Math.max(end, t + dur + 0.01);
   },
   dash(ctx, out, t) {
-    const R = rig(ctx), k = 1 + (R.srand() - 0.5) * 0.1, src = ctx.createBufferSource(), bp = filt(ctx, 'bandpass', 500, 1.6), g = ctx.createGain(), p = pan(ctx, 0);
-    src.buffer = R.noise;
-    src.loop = true;
-    bp.frequency.setValueAtTime(500 * k, t);
-    bp.frequency.exponentialRampToValueAtTime(3200 * k, t + 0.12);
+    const k = 1 + (rig(ctx).srand() - 0.5) * 0.1, bp = filt(ctx, 'bandpass', 500, 1.6), g = ctx.createGain(), p = pan(ctx, 0);
+    const end = env(g.gain, t, 0.26, 0.05, 0.22);
+    slide(bp.frequency, 500 * k, 3200 * k, t, t + 0.12);
     bp.frequency.exponentialRampToValueAtTime(1100 * k, t + 0.28);
     if (p.pan) {
       p.pan.setValueAtTime(-0.35, t);
       p.pan.linearRampToValueAtTime(0.35, t + 0.28);
     }
-    src.connect(bp).connect(g).connect(p).connect(out);
-    const end = env(g.gain, t, 0.26, 0.05, 0.22);
-    src.start(t, (t * 0.53) % 1.5);
-    src.stop(end);
+    noise(ctx, bp, t, end);
+    bp.connect(g).connect(p).connect(out);
     tone(ctx, out, t, { f: 170, f1: 85, glide: 0.2, a: 0.03, d: 0.2, peak: 0.06 });
     return end;
   },
   echoSpawn(ctx, out, t) {
     const r = rig(ctx).srand, ws = crusher(ctx), lp = filt(ctx, 'lowpass', 900, 4), g = gain(ctx, 0.16);
-    lp.frequency.setValueAtTime(900, t);
-    lp.frequency.exponentialRampToValueAtTime(5000, t + 1.05);
+    slide(lp.frequency, 900, 5000, t, t + 1.05);
     ws.connect(lp).connect(g).connect(out);
     send(ctx, g, 0.3);
     [45, 52, 57, 60, 64, 69, 72, 76, 81, 84, 88, 93].forEach((m, i) => {
@@ -495,19 +424,10 @@ const VOICES = {
     const h = t + 0.72, lp = filt(ctx, 'lowpass', 500, 3), g = ctx.createGain();
     tone(ctx, out, t, { type: 'triangle', f: mtof(81), d: 0.12, peak: 0.08 }); // "ready" blip
     hiss(ctx, out, t, { f: 400, f1: 5000, sweep: 0.7, q: 1.5, a: 0.68, d: 0.04, peak: 0.1 }); // noise riser
-    lp.frequency.setValueAtTime(500, t);
-    lp.frequency.exponentialRampToValueAtTime(3000, h);
+    slide(lp.frequency, 500, 3000, t, h);
     lp.connect(g).connect(out);
     env(g.gain, t, 0.06, 0.66, 0.05);
-    for (const m of [57, 64, 69]) {
-      const o = ctx.createOscillator(); // saw chord gliding up an octave into the hit
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(mtof(m - 12), t);
-      o.frequency.exponentialRampToValueAtTime(mtof(m), h);
-      o.connect(lp);
-      o.start(t);
-      o.stop(h + 0.06);
-    }
+    for (const m of [57, 64, 69]) slide(osc(ctx, lp, 'sawtooth', mtof(m - 12), t, h + 0.06).frequency, mtof(m - 12), mtof(m), t, h); // saws rise an octave
     tone(ctx, out, h, { f: 150, f1: 45, glide: 0.12, d: 0.4, peak: 0.45 });
     hiss(ctx, out, h, { f: 1800, q: 0.8, d: 0.25, peak: 0.12 });
     return stab(ctx, out, h, [57, 60, 64, 69], { peak: 0.04, d: 0.45, cut: 2600, cut1: 500 });
@@ -520,13 +440,10 @@ const VOICES = {
     return stab(ctx, out, t + 0.28, [48, 60, 64, 67, 72], { peak: 0.04, a: 0.01, hold: 0.2, d: 0.7, cut: 3200, cut1: 700 }); // C
   },
   death(ctx, out, t) {
-    const r = rig(ctx).srand, o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = 'triangle';
+    const r = rig(ctx).srand, pre = gain(ctx, 0.9), g = ctx.createGain(), end = env(g.gain, t, 0.09, 0.005, 0.5, 0.7);
+    const o = osc(ctx, pre, 'triangle', 880, t, end); // stair-stepped, bit-crushed descent
     for (let i = 0; i < 18; i++) o.frequency.setValueAtTime(880 * 2 ** (-i / 4.5) * (1 + (r() - 0.5) * 0.12), t + i * 0.065);
-    o.connect(gain(ctx, 0.9)).connect(crusher(ctx)).connect(filt(ctx, 'lowpass', 2400, 2)).connect(g).connect(out);
-    const end = env(g.gain, t, 0.09, 0.005, 0.5, 0.7); // stair-stepped bit-crushed descent
-    o.start(t);
-    o.stop(end);
+    pre.connect(crusher(ctx)).connect(filt(ctx, 'lowpass', 2400, 2)).connect(g).connect(out);
     tone(ctx, out, t, { type: 'sawtooth', f: 220, f1: 28, glide: 1.3, a: 0.01, hold: 0.3, d: 1, peak: 0.12, lp: 900 }); // tape-stop dive
     stab(ctx, out, t + 0.1, [33, 45], { peak: 0.08, a: 0.35, hold: 0.5, d: 0.75, cut: 260, cut1: 110, q: 4 }); // low drone
     send(ctx, out, 0.2);
@@ -545,19 +462,9 @@ const RULES = {
 // ─── core: sequencer + sfx dispatch for one context (realtime or offline) ───
 class Core {
   constructor(ctx, seed) {
-    this.ctx = ctx;
-    this.R = buildRig(ctx, seed);
-    this.voices = [];
-    this.last = {};
-    this.playing = false;
-    this.silent = false; // muted: sequencer keeps time but creates no nodes
-    this.bus = null;
-    this.step = 0;
-    this.t0 = 0;
-    this.level = 0;
-    this.pending = 0;
-    this.needPad = false;
-    this.padEnd = 0;
+    Object.assign(this, { ctx, R: buildRig(ctx, seed), voices: [], last: {}, bus: null });
+    // music state; `silent` (muted) keeps time without creating nodes
+    Object.assign(this, { playing: false, silent: false, step: 0, t0: 0, level: 0, pending: 0, needPad: false, padEnd: 0 });
   }
 
   startMusic(t) {
@@ -581,13 +488,13 @@ class Core {
     this.bus = null;
   }
 
-  setIntensity(level, t) {
+  setIntensity(level) {
     this.pending = level; // lands on the next bar
     if (!this.playing) this.level = level;
   }
 
   setDuck(a, t) {
-    this.R.duckLP.detune.setTargetAtTime(-7200 * a, t, 0.12); // 20 kHz → ~310 Hz, log sweep, ~0.4 s
+    this.R.duckLP.detune.setTargetAtTime(-7200 * a, t, 0.12); // 20 kHz → ~310 Hz as a log sweep, ~0.4 s
     this.R.duckG.gain.setTargetAtTime(1 - 0.6 * a, t, 0.12);
   }
 
@@ -600,27 +507,21 @@ class Core {
       this.needPad = true;
       t = this.t0 + this.step * STEP;
     }
-    while (t < until) {
-      this._play(this.step, t);
-      t = this.t0 + ++this.step * STEP;
-    }
+    for (; t < until; t = this.t0 + ++this.step * STEP) this._play(this.step, t);
   }
 
   _play(step, t) {
     const s = step % LOOP, sb = s % BAR, bar = s >> 4, resync = this.needPad;
     if (sb === 0 || resync) this.level = this.pending;
-    if (this.silent) {
-      this.needPad = true;
-      return;
-    }
-    this.needPad = false;
+    this.needPad = this.silent; // muted: keep time only, resync the pad once sound returns
+    if (this.silent) return;
     const { ctx } = this, B = this.bus, L = this.level, ch = CHORDS[bar >> 1], rnd = this.R.mrand;
 
     // pad on every chord change, or right away after a resync if the previous one has ended
     if (s % 32 === 0 || (resync && t >= this.padEnd)) {
       this.padEnd = pad(ctx, B.room, t, ch.pad, (32 - (s % 32)) * STEP, [950, 1000, 1200, 1500][L], s % 32 ? 0.3 : 1.2, [0.05, 0.04, 0.034, 0.034][L]);
     }
-    if (L === 0 && sb % 8 === 0) tone(ctx, B.dry, t, { type: 'triangle', f: mtof(ch.bass), a: 0.12, hold: 0.15, d: 0.8, peak: 0.1, lp: 240 });
+    if (L === 0 && sb % 8 === 0) tone(ctx, B.dry, t, { type: 'triangle', f: mtof(ch.bass), a: 0.12, hold: 0.15, d: 0.8, peak: 0.1, lp: 240 }); // slow sub pulse
     const ai = L >= 2 ? ARP_FAST[sb % 8] : ARP_SLOW[sb];
     if (ai >= 0) {
       const m = ai < 4 ? ch.pad[ai] + 12 : ch.pad[ai - 3] + 24;
@@ -653,7 +554,7 @@ class Core {
     if (t - (this.last[key] ?? -1) < rule[0]) return; // rate limit
     const vs = this.voices.filter((v) => v.end > t);
     if (vs.length >= MAX_VOICES) {
-      const i = vs.findIndex((v) => v.prio <= prio); // oldest stealable voice
+      const i = vs.findIndex((v) => v.prio <= prio); // oldest stealable voice, else drop the new one
       if (i < 0) return void (this.voices = vs);
       vs[i].out.gain.setTargetAtTime(0, t, 0.006);
       vs.splice(i, 1);
@@ -665,10 +566,10 @@ class Core {
     this.last[key] = t;
   }
 
-  dispatch(name, t, args = []) {
+  dispatch(name, t, args) {
     if (name === 'startMusic') this.startMusic(t);
     else if (name === 'stopMusic') this.stopMusic(t);
-    else if (name === 'setIntensity') this.setIntensity(toLevel(args[0]), t);
+    else if (name === 'setIntensity') this.setIntensity(toLevel(args[0]));
     else if (name === 'setDuck') this.setDuck(clamp(num(args[0], 0), 0, 1), t);
     else if (name === 'setMasterVolume') this.R.master.gain.setTargetAtTime(clamp(num(args[0], 0.8), 0, 1), t, 0.02);
     else this.sfx(name, t, args);
@@ -677,16 +578,9 @@ class Core {
 
 // ─── public API ─────────────────────────────────────────────────────────────
 export class AudioEngine {
-  /** @param {{suspendWhenHidden?: boolean}} [opts] suspend the context while the tab is hidden (default true) */
+  /** @param {{suspendWhenHidden?: boolean}} [opts] suspend the AudioContext while the tab is hidden (default true) */
   constructor(opts = {}) {
-    this._ctx = null;
-    this._core = null;
-    this._muted = false;
-    this._vol = 0.8;
-    this._music = false;
-    this._level = 0;
-    this._duck = 0;
-    this._hidden = false;
+    Object.assign(this, { _ctx: null, _core: null, _muted: false, _vol: 0.8, _music: false, _level: 0, _duck: 0, _hidden: false });
     this._hideSuspend = opts.suspendWhenHidden !== false;
     this._onVis = () => {
       const ctx = this._ctx;
@@ -708,18 +602,11 @@ export class AudioEngine {
       if (!this._ctx) {
         const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
         if (!AC) return;
-        let ctx;
-        try {
-          ctx = new AC({ latencyHint: 'interactive' });
-        } catch {
-          ctx = new AC();
-        }
-        const c = new Core(ctx), now = ctx.currentTime;
-        this._ctx = ctx;
-        this._core = c;
+        const ctx = create(AC, { latencyHint: 'interactive' }, []), c = new Core(ctx), now = ctx.currentTime;
+        Object.assign(this, { _ctx: ctx, _core: c });
         c.silent = this._muted;
         c.R.master.gain.setTargetAtTime(this._muted ? 0 : this._vol, now, 0.05);
-        c.setIntensity(this._level, now);
+        c.setIntensity(this._level);
         c.setDuck(this._duck, now);
         if (this._music) c.startMusic(now + 0.06);
         setInterval(() => this._tick(), TICK_MS);
@@ -731,21 +618,15 @@ export class AudioEngine {
     }
   }
 
-  get ready() {
-    return !!this._ctx && this._ctx.state === 'running';
-  }
-  get muted() {
-    return this._muted;
-  }
+  get ready() { return !!this._ctx && this._ctx.state === 'running'; }
+  get muted() { return this._muted; }
+  /** Mute ramps the master out; sfx become no-ops, the music keeps time silently. */
   setMuted(m) {
     this._muted = !!m;
     if (this._core) this._core.silent = this._muted;
     this._applyVolume();
   }
-  toggleMute() {
-    this.setMuted(!this._muted);
-    return this._muted;
-  }
+  toggleMute() { this.setMuted(!this._muted); return this._muted; }
   setMasterVolume(v) {
     this._vol = clamp(num(v, this._vol), 0, 1);
     this._applyVolume();
@@ -764,12 +645,12 @@ export class AudioEngine {
     this._music = false;
     this._run((c, now) => c.stopMusic(now));
   }
-  /** 0 menu · 1 calibration · 2 echo fight · 3 high intensity. Lands on the next bar. */
+  /** 0 menu · 1 calibration · 2 echo fight · 3 high intensity / multi-echo. Lands on the next bar. */
   setIntensity(level) {
     this._level = toLevel(level);
-    this._run((c, now) => c.setIntensity(this._level, now));
+    this._run((c) => c.setIntensity(this._level));
   }
-  /** 0..1 — 1 = heavily low-passed and quieter music (training interlude, pause). ~0.4 s ramp. */
+  /** 0..1 — 1 = heavily low-passed, quieter music (training interlude, pause). ~0.4 s ramp. */
   setDuck(amount) {
     this._duck = clamp(num(amount, 0), 0, 1);
     this._run((c, now) => c.setDuck(this._duck, now));
@@ -795,46 +676,33 @@ export class AudioEngine {
 
   // ---- offline render (trailer) ----
   /**
-   * Render music + sfx into a 16-bit stereo WAV (ArrayBuffer). `events`: [{ t, name, args }] where name is any
-   * sfx method, 'startMusic', 'stopMusic', 'setIntensity' [level], 'setDuck' [amount] or 'setMasterVolume' [v].
-   * Deterministic for a given `seed`. Resolves to null when OfflineAudioContext is unavailable.
+   * Render music + sfx into a 16-bit stereo WAV (ArrayBuffer). `events`: [{ t, name, args }] where name is any sfx
+   * method, 'startMusic', 'stopMusic', 'setIntensity' [level], 'setDuck' [amount] or 'setMasterVolume' [v].
+   * Uses the current master volume (not mute). Deterministic per `seed`; resolves to null without OfflineAudioContext.
    */
   async renderOfflineWav({ duration, sampleRate = 48000, events = [], seed = 0x5e1f } = {}) {
     const OAC = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext, dur = num(duration, 0);
     if (!OAC || dur <= 0) return null;
-    const length = Math.ceil(dur * sampleRate);
-    let ctx;
-    try {
-      ctx = new OAC({ numberOfChannels: 2, length, sampleRate });
-    } catch {
-      ctx = new OAC(2, length, sampleRate);
-    }
-    const core = new Core(ctx, seed >>> 0);
+    const length = Math.ceil(dur * sampleRate), ctx = create(OAC, { numberOfChannels: 2, length, sampleRate }, [2, length, sampleRate]);
+    const core = new Core(ctx, seed >>> 0), evs = (events || []).filter((e) => e && Number.isFinite(e.t)).sort((a, b) => a.t - b.t);
     core.R.master.gain.value = this._vol;
-    const evs = (events || []).filter((e) => e && Number.isFinite(e.t)).sort((a, b) => a.t - b.t);
     let i = 0;
     const scheduleTo = (T) => {
       for (; i < evs.length && evs[i].t < T; i++) {
         const t = Math.max(0, evs[i].t);
         core.advance(t);
-        core.dispatch(evs[i].name, t, evs[i].args || []);
+        core.dispatch(evs[i].name, t, [].concat(evs[i].args ?? []));
       }
       core.advance(T);
     };
-    // Build the graph in 1 s chunks (scheduled ≥1 s ahead) so long renders don't hold every node at once.
+    // Build the graph in 1 s chunks, always ≥1 s ahead of the render, so long renders stay light on memory.
+    // Without offline suspend (e.g. Firefox) everything is simply scheduled up front.
     let first = dur;
     if (typeof ctx.suspend === 'function') {
       try {
-        for (let s = 1; s < dur; s++) {
-          ctx.suspend(s).then(() => {
-            scheduleTo(Math.min(dur, s + 2));
-            ctx.resume();
-          });
-        }
+        for (let s = 1; s < dur; s++) ctx.suspend(s).then(() => (scheduleTo(Math.min(dur, s + 2)), ctx.resume()));
         first = Math.min(dur, 2);
-      } catch {
-        first = dur;
-      }
+      } catch {} // on a partial failure the remainder is scheduled up front as well
     }
     scheduleTo(first);
     const buf = await new Promise((res, rej) => {
@@ -847,29 +715,18 @@ export class AudioEngine {
 
   // ---- internals ----
   _run(fn) {
-    if (!this._core) return;
     try {
-      fn(this._core, this._ctx.currentTime);
+      if (this._core) fn(this._core, this._ctx.currentTime);
     } catch (e) {
-      warn(e);
+      warn(e); // never let audio break the game
     }
   }
   _sfx(name, args) {
     if (!this._core || this._muted || this._ctx.state !== 'running') return;
-    try {
-      this._core.sfx(name, this._ctx.currentTime + SFX_LEAD, args);
-    } catch (e) {
-      warn(e);
-    }
+    this._run((c, now) => c.sfx(name, now + SFX_LEAD, args));
   }
   _tick() {
-    const ctx = this._ctx;
-    if (!ctx || ctx.state !== 'running') return;
-    try {
-      this._core.advance(ctx.currentTime + AHEAD, ctx.currentTime);
-    } catch (e) {
-      warn(e);
-    }
+    if (this._ctx && this._ctx.state === 'running') this._run((c, now) => c.advance(now + AHEAD, now));
   }
   _applyVolume() {
     this._run((c, now) => c.R.master.gain.setTargetAtTime(this._muted ? 0 : this._vol, now, 0.02));
@@ -883,15 +740,9 @@ export function encodeWav(buffer) {
   const str = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
   str(0, 'RIFF');
   v.setUint32(4, 36 + bytes, true);
-  str(8, 'WAVE');
-  str(12, 'fmt ');
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true); // PCM
-  v.setUint16(22, ch, true);
-  v.setUint32(24, sr, true);
-  v.setUint32(28, sr * ch * 2, true);
-  v.setUint16(32, ch * 2, true);
-  v.setUint16(34, 16, true);
+  str(8, 'WAVEfmt ');
+  [[16, 16, 4], [20, 1, 2], [22, ch, 2], [24, sr, 4], [28, sr * ch * 2, 4], [32, ch * 2, 2], [34, 16, 2]].forEach(([o, val, size]) =>
+    size === 4 ? v.setUint32(o, val, true) : v.setUint16(o, val, true)); // fmt chunk: PCM, channels, rate, byte rate, align, bits
   str(36, 'data');
   v.setUint32(40, bytes, true);
   const data = Array.from({ length: ch }, (_, c) => buffer.getChannelData(c));

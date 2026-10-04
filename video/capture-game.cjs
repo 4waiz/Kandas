@@ -68,7 +68,7 @@ const HL = (t, pink) => `<span class="hl${pink ? ' pink' : ''}"><span>${t}</span
       while (pending.length && pending[0][0] <= local + 1e-6) {
         const [, cue] = pending.shift();
         if (typeof cue === 'function') await cue();
-        else if (cue.caption && mine) await game((c) => window.__selfplay.ui.caption(c[0], c[1]), cue.caption);
+        else if (cue.caption && mine) await game((c) => window.__selfplay.ui.caption(c[0], c[1], c[2]), cue.caption);
         else if (cue.clear && mine) await game(() => window.__selfplay.ui.caption(null, null));
       }
       const vt = s.start + local;
@@ -99,7 +99,7 @@ const HL = (t, pink) => `<span class="hl${pink ? ' pink' : ''}"><span>${t}</span
 
   await skipUntil(() => window.__selfplay.state === 'train');
   await capture('train', [
-    [1.0, { caption: ['ON-DEVICE · NO SERVERS', `A neural net learns ${HL('you')}<br>in milliseconds.`] }],
+    [1.0, { caption: ['ON-DEVICE · NO SERVERS', `A neural net learns ${HL('you')}<br>in milliseconds.`, 'top'] }],
     [4.2, { clear: true }],
   ]);
 
@@ -121,6 +121,7 @@ const HL = (t, pink) => `<span class="hl${pink ? ' pink' : ''}"><span>${t}</span
   await game(() => { const g = window.__selfplay; g.player.invuln = 0; g.player.hp = 1; g.hurtPlayer(0, -1, 0xff4d9e); });
   await capture('over', [
     [0.2, { caption: ['GAME OVER?', `Send your clone to a ${HL('friend.', true)}`] }],
+    [1.9, { clear: true }],
     [2.7, async () => { await page.fill('.name-in', 'AWAIZ'); }],
     [3.6, async () => { await game(() => window.__selfplay.onAction('share')); }],
   ]);
@@ -132,7 +133,7 @@ const HL = (t, pink) => `<span class="hl${pink ? ' pink' : ''}"><span>${t}</span
   await open(`#echo=${code}`);
   await skip(1.2);
   await capture('duel', [
-    [0.2, { caption: ['THE LINK IS THE OPPONENT', `Your friend fights ${HL('your brain.')}`] }],
+    [0.2, { caption: ['THE LINK IS THE OPPONENT', `Your friend fights ${HL('your brain.')}`, 'right'] }],
     [3.0, async () => { await game(() => window.__selfplay.onAction('duel')); }],
     [5.2, { caption: ['ASYNC PVP · ZERO BACKEND', `~1 KB of weights.<br>${HL('Infinite', true)} rivals.`] }],
   ]);

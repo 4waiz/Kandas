@@ -117,6 +117,13 @@ export class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.inGameplay() && !this.paused) this.togglePause();
     });
+    // A challenge link pasted into an open tab only changes the hash.
+    addEventListener('hashchange', () => {
+      const duel = readHashEcho();
+      if (!duel) return;
+      this.duel = duel;
+      if (this.state === 'title' || this.state === 'over') this.toTitle();
+    });
 
     this.toTitle();
     this.last = performance.now();
@@ -329,6 +336,7 @@ export class Game {
   }
 
   startRun(mode = 'story') {
+    if (mode === 'duel' && !this.duel) mode = 'story';
     seed(this.capture ? 20261004 : (Math.random() * 4294967296) >>> 0);
     this.resetArena();
     this.mode = mode;
@@ -518,7 +526,7 @@ export class Game {
       if (tr.done) this.onTrained();
     }
     if (this.trained && t > this.trainedAt + 1.25) {
-      if (this.round === 1 && this.mode === 'story') {
+      if (this.round === 1 && this.mode === 'story' && this.profile) {
         this.state = 'profile';
         this.stateT = 0;
         this.rig = 'overview';

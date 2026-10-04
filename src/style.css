@@ -289,7 +289,9 @@ body.touch .pause-btn { display: block; }
 body.capture .predict .bar i { transition: none; }
 
 /* trailer lower-third captions */
-.caption { position: absolute; left: calc(40 * var(--u)); bottom: calc(150 * var(--u)); display: none; max-width: calc(760 * var(--u)); }
+.caption { position: absolute; z-index: 20; left: calc(40 * var(--u)); bottom: calc(150 * var(--u)); display: none; max-width: calc(760 * var(--u)); }
+.caption.top { top: calc(36 * var(--u)); bottom: auto; }
+.caption.right { left: auto; right: calc(40 * var(--u)); bottom: calc(110 * var(--u)); }
 .caption.on { display: block; animation: capin 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
 .cap-box { padding: calc(14 * var(--u)) calc(22 * var(--u)) calc(16 * var(--u)); display: flex; flex-direction: column; gap: calc(8 * var(--u)); }
 .cap-eyebrow { color: var(--acc-sun); }

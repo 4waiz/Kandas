@@ -433,12 +433,14 @@ export class UI {
   }
 
   // Trailer captions (lower third). Only the capture director uses these.
-  caption(eyebrow, html) {
+  caption(eyebrow, html, where = 'left') {
     const c = this.$('.caption');
     if (!html) {
       c.classList.remove('on');
       return;
     }
+    c.classList.toggle('top', where === 'top');
+    c.classList.toggle('right', where === 'right');
     c.querySelector('.cap-eyebrow').innerHTML = `${AST}${eyebrow}`;
     c.querySelector('.cap-text').innerHTML = html;
     c.classList.remove('on');

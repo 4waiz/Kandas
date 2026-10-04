@@ -18,6 +18,17 @@ The same model also **predicts where you're about to move**. A live **PREDICTABI
 
 When you lose, you can **send your Echo to a friend**. The trained weights fit in the link itself (~1 KB), so your friend fights *your brain* with no server, account or install.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![The network trains on your recorded decisions](media/stills/training.jpg) | ![The AI's read on your playstyle](media/stills/profile.jpg) |
+| **Train** — your decisions stream into a live neural network | **Profile** — what the AI learned about you |
+| ![Fighting your Echo, with the prediction ghost](media/stills/echo-fight.jpg) | ![Several generations of you](media/stills/generations.jpg) |
+| **Fight yourself** — the pink ring is where it predicts you'll go | **Generations** — every round, another you joins |
+| ![Send your Echo as a link](media/stills/share.jpg) | ![A friend receives the challenge](media/stills/duel-invite.jpg) |
+| **Share** — the weights fit in the URL | **Duel** — your friend fights your brain |
+
 ## The loop
 
 | | | |

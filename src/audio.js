@@ -502,8 +502,8 @@ class Core {
   advance(until, now) {
     if (!this.playing) return;
     let t = this.t0 + this.step * STEP;
-    if (now !== undefined && t < now) {
-      this.step += Math.ceil((now - t) / STEP); // fell behind (hidden tab / long frame): skip, never burst
+    if (now !== undefined && t < now + SFX_LEAD) {
+      this.step += Math.ceil((now + SFX_LEAD - t) / STEP); // fell behind (hidden tab / long frame): skip, never burst
       this.needPad = true;
       t = this.t0 + this.step * STEP;
     }

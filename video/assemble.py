@@ -65,7 +65,7 @@ dur = timeline['duration']
 cmd = [
     'ffmpeg', '-y', '-loglevel', 'error', '-framerate', str(FPS), '-i', os.path.join(seq, '%05d.jpg'), '-i', wav,
     # CRF with a VBV cap keeps the grainy footage under ~50 MB for GitHub.
-    '-c:v', 'libx264', '-preset', 'slow', '-crf', '19', '-maxrate', '4500k', '-bufsize', '9000k',
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '19', '-maxrate', '4500k', '-bufsize', '9000k',
     '-pix_fmt', 'yuv420p', '-profile:v', 'high',
     '-af', f'loudnorm=I=-15:TP=-1.5:LRA=11,afade=t=in:st=0:d=0.3,afade=t=out:st={dur - 2.5}:d=2.5',
     '-ar', '48000',

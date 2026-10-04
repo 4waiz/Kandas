@@ -87,7 +87,7 @@ const TEMPLATE = `
 <section class="screen scr-title">
   <img class="ks-logo" src="${logoUrl}" alt="Kanban Studios">
   <div class="title-wrap">
-    <div class="label eyebrow">${AST}CAMBRIDGE × ARCADE AI HACKATHON 2026</div>
+    <div class="label eyebrow">${AST}TENCENT × ARCADE AI HACKATHON · CAMBRIDGE 2026</div>
     <h1 class="marker title">SELF <span class="hl"><span>PLAY</span></span></h1>
     <p class="hand tagline">The final boss is a neural network <b>trained on you</b>.</p>
     <div class="duel sketchbox rot-b" hidden>

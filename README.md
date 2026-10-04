@@ -4,7 +4,7 @@
 
 > **A three.js arena shooter where a neural network trains on how *you* play — live, in your browser — then becomes your rival and predicts your next move.**
 
-**▶ Play:** https://4waiz.github.io/Kandas/ &nbsp;·&nbsp; **🎬 Trailer:** [`media/self-play-trailer.mp4`](media/self-play-trailer.mp4) &nbsp;·&nbsp; **Built by [Team Kanban](https://kanbanstudios.ae/team-kanban) — by Awaiz Ahmed** &nbsp;·&nbsp; Cambridge × Arcade AI Hackathon 2026
+**▶ Play:** https://4waiz.github.io/Kandas/ &nbsp;·&nbsp; **🎬 Trailer:** [watch](https://4waiz.github.io/Kandas/trailer.mp4) · [`media/self-play-trailer.mp4`](media/self-play-trailer.mp4) &nbsp;·&nbsp; **Built by [Team Kanban](https://kanbanstudios.ae/team-kanban) — by Awaiz Ahmed** &nbsp;·&nbsp; Tencent × Arcade AI Hackathon · Cambridge 2026 (Game Tech track)
 
 ---
 
@@ -106,4 +106,4 @@ The 90-second trailer ([`media/self-play-trailer.mp4`](media/self-play-trailer.m
 
 **Team Kanban — by Awaiz Ahmed** · [kanbanstudios.ae/team-kanban](https://kanbanstudios.ae/team-kanban)
 
-Built for the **Cambridge × Arcade AI Hackathon 2026**. Fonts: Caveat Brush, Architects Daughter and Shadows Into Light Two (SIL OFL). three.js is MIT-licensed.
+Built for the **Tencent × Arcade AI Hackathon** (Cambridge, UK, October 2026) — Game Tech track. Fonts: Caveat Brush, Architects Daughter and Shadows Into Light Two (SIL OFL). three.js is MIT-licensed.

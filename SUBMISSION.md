@@ -1,6 +1,7 @@
-# Submission — Cambridge × Arcade AI Hackathon 2026
+# Submission — Tencent × Arcade AI Hackathon (Cambridge, UK · Oct 3–4, 2026)
 
-Paste-ready answers for the submission form (about.tryarcade.com/submit). Pick the length each field allows.
+Paste-ready answers for the submission form: https://about.tryarcade.com/submit
+**Deadline: 2:00 PM UK time, Oct 4.** Submit to the **Game Tech track**. The Arcade track requires publishing on the Arcade marketplace first.
 
 ---
 
@@ -14,7 +15,7 @@ Team Kanban — https://kanbanstudios.ae/team-kanban
 Awaiz Ahmed
 
 **Track**
-Game × AI
+Game Tech
 
 **Tagline** (51 chars)
 The final boss is a neural network trained on you.
@@ -28,7 +29,7 @@ SELF PLAY is a three.js arena shooter where a neural network trains on how you p
 **Links**
 - Play (no install, desktop + mobile + gamepad): https://4waiz.github.io/Kandas/
 - Code: https://github.com/4waiz/Kandas
-- Trailer (90 s): `media/self-play-trailer.mp4` in the repo (upload to YouTube/Drive if the form needs a video URL)
+- Trailer (90 s, direct link): https://4waiz.github.io/Kandas/trailer.mp4 (also `media/self-play-trailer.mp4` in the repo)
 - Team: https://kanbanstudios.ae/team-kanban
 
 ---

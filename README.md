@@ -29,6 +29,10 @@ When you lose, you can **send your Echo to a friend**. The trained weights fit i
 | ⬡ | **MIRROR** | Walks your exact path from two seconds ago and fires where the model predicts you'll be. Repeating a route walks you into it. |
 | ⬢ | **WARDEN** | Boss at the end of round 3+. A ring shield eats your bullets; dash through the ring to open it, then hit it fast. |
 
+| ![Leech pack and its name card](media/stills/cast-leech.jpg) | ![Mirror, with Echo personalities on the nameplates](media/stills/cast-mirror.jpg) | ![The Warden boss arrives](media/stills/cast-warden.jpg) |
+|---|---|---|
+| **Leech** pack | **Mirror** + Echo personalities | **Warden** boss |
+
 Every new character gets a name card the first time it appears. The predictability meter flinches whenever a Mirror or Echo lands a prediction-based hit.
 
 ## Screenshots
